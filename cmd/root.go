@@ -8,10 +8,11 @@ import (
 
 func InitializeCommands() *cobra.Command {
 	var rootCmd = &cobra.Command{
-		Use:   "conveyor",
-		Short: "Conveyor is a tool to transport big files as OCI images.",
-		Long: `Conveyor is designed to efficiently transport large files packaged as OCI container images,
-ensuring fast, reliable, and secure transfers across different environments.`,
+		Use:   "geranos",
+		Short: "Geranos is a tool to transport big files as OCI images.",
+		Long: `Geranos is designed to efficiently transport large files packaged as OCI container images,
+ensuring fast, reliable, and secure transfers across different environments.
+It relies on sparse files and Copy-on-Write filesystem features to optimize disk usage`,
 		// This function can be used to execute any code when the root command is called without any subcommands
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println(cmd.Short)

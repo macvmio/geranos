@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/conveyor.iml" filepath="$PROJECT_DIR$/.idea/conveyor.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/geranos.iml" filepath="$PROJECT_DIR$/.idea/geranos.iml" />
     </modules>
   </component>
 </project>

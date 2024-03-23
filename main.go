@@ -1,6 +1,6 @@
 package main
 
-import "github.com/tomekjarosik/conveyor/cmd"
+import "github.com/tomekjarosik/geranos/cmd"
 
 func main() {
 	cmd.Execute(cmd.InitializeCommands())
