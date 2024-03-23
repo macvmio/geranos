@@ -7,30 +7,30 @@ import (
 	"github.com/tomekjarosik/geranos/pkg/transporter"
 )
 
-func createInspectCommand() *cobra.Command {
-	var inspectCmd = &cobra.Command{
-		Use:   "inspect [image name]",
-		Short: "Inspect details of a specific OCI image.",
-		Long:  `Provides detailed information about a specific OCI image, such as size, creation date, tags, and custom metadata.`,
+func createRemoveCommand() *cobra.Command {
+	var removeCommand = &cobra.Command{
+		Use:   "remove [image ref]",
+		Short: "Remove locally stored image",
+		Long:  ``,
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			imagesDir := viper.GetString("images_directory")
 			if len(imagesDir) == 0 {
-				fmt.Printf("undefined image directory")
+				fmt.Println("undefined image directory")
 				return
 			}
 			src := args[0]
 			opts := []transporter.Option{
 				transporter.WithImagesPath(imagesDir),
 			}
-			out, err := transporter.Inspect(src, opts...)
+			err := transporter.Remove(src, opts...)
 			if err != nil {
-				fmt.Printf("%v", err)
+				fmt.Printf("unable to remove: %v\n", err)
 			} else {
-				fmt.Println(out)
+				fmt.Printf("successfully removed %v\n", src)
 			}
 		},
 	}
 
-	return inspectCmd
+	return removeCommand
 }

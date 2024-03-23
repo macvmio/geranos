@@ -28,6 +28,12 @@ func WithInsecureTransport() Option {
 	}
 }
 
+func WithMountedReference(ref name.Reference) Option {
+	return func(o *options) {
+		o.mountedReference = ref
+	}
+}
+
 func makeOptions(opts ...Option) *options {
 	res := options{
 		imagesPath:       mustExpandUser("~/.geranos/images"),
@@ -40,6 +46,5 @@ func makeOptions(opts ...Option) *options {
 	for _, o := range opts {
 		o(&res)
 	}
-	WithInsecureTransport()(&res)
 	return &res
 }

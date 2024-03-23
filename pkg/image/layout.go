@@ -8,9 +8,11 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/types"
+	"github.com/tomekjarosik/geranos/pkg/image/duplicator"
 	"github.com/tomekjarosik/geranos/pkg/image/segmentlayer"
 	"github.com/tomekjarosik/geranos/pkg/image/sparsefile"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -27,8 +29,8 @@ const FilenameAnnotationKey = "filename"
 const RangeAnnotationKey = "range"
 
 type LayoutMapper struct {
-	rootDir              string
-	makeshiftConstructor SketchConstructor
+	rootDir           string
+	sketchConstructor SketchConstructor
 }
 
 type Layout struct {
@@ -50,9 +52,13 @@ func (mc *noopMakeshiftConstructor) Construct(dir string, fileRecipes []*FileRec
 
 func NewLayoutMapper(rootDir string) *LayoutMapper {
 	return &LayoutMapper{
-		rootDir:              rootDir,
-		makeshiftConstructor: &noopMakeshiftConstructor{},
+		rootDir:           rootDir,
+		sketchConstructor: &noopMakeshiftConstructor{},
 	}
+}
+
+func (lm *LayoutMapper) refToDir(ref name.Reference) string {
+	return filepath.Join(lm.rootDir, ref.String())
 }
 
 func (lm *LayoutMapper) writeLayer(destinationDir string, segment *FileSegmentRecipe, layer v1.Layer) (written int64, skipped int64, err error) {
@@ -88,12 +94,12 @@ func (lm *LayoutMapper) Write(img v1.Image, ref name.Reference, progress chan Pr
 	if err != nil {
 		return err
 	}
-	destinationDir := filepath.Join(lm.rootDir, ref.String())
+	destinationDir := lm.refToDir(ref)
 	err = os.MkdirAll(destinationDir, 0o777)
 	if err != nil {
 		return err
 	}
-	err = lm.makeshiftConstructor.Construct(destinationDir, recipes)
+	err = lm.sketchConstructor.Construct(destinationDir, recipes)
 	if err != nil {
 		// TODO: ensure we don't delete anything useful _ = os.RemoveAll(destinationDir)
 		return err
@@ -285,4 +291,111 @@ func (lm *LayoutMapper) Read(ref name.Reference, opt ...Option) (v1.Image, error
 		OSVersion:    "TODO",
 		Variant:      "",
 	})
+}
+
+// IsDirWithOnlyFiles checks if the given path is a directory that contains only files (no subdirectories).
+func IsDirWithOnlyFiles(path string) (bool, error) {
+	// Check the provided path is indeed a directory
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	if !fileInfo.IsDir() {
+		return false, nil // Not even a directory
+	}
+
+	// Read the directory contents
+	contents, err := os.ReadDir(path)
+	if err != nil {
+		return false, err
+	}
+
+	// Iterate over the directory contents
+	for _, content := range contents {
+		if content.IsDir() {
+			return false, nil // Found a subdirectory, so return false
+		}
+	}
+
+	return true, nil // No subdirectories found, only files
+}
+
+func (lm *LayoutMapper) Adopt(src string, ref name.Reference) error {
+	isFlatDir, err := IsDirWithOnlyFiles(src)
+	if err != nil {
+		return fmt.Errorf("unable to verify if directory is flat: %w", err)
+	}
+	if !isFlatDir {
+		return fmt.Errorf("directory with subdirectories are not supported")
+	}
+	return duplicator.CloneDirectory(src, lm.refToDir(ref))
+}
+
+type Properties struct {
+	Ref       name.Reference
+	DiskUsage string
+	Size      int64
+}
+
+func directorySize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
+}
+
+func (lm *LayoutMapper) ContainsManifest(ref name.Reference) bool {
+	return true
+}
+
+func (lm *LayoutMapper) List() ([]Properties, error) {
+	res := make([]Properties, 0)
+	err := filepath.WalkDir(lm.rootDir, func(path string, d fs.DirEntry, err error) error {
+		if !d.IsDir() {
+			return nil
+		}
+		processedPath := strings.TrimPrefix(path, lm.rootDir)
+		processedPath = strings.Trim(processedPath, "/")
+		ref, err := name.ParseReference(processedPath, name.StrictValidation)
+		if err != nil {
+			return nil
+		}
+		if !lm.ContainsManifest(ref) {
+			return nil
+		}
+		dirSize, err := directorySize(path)
+		if err != nil {
+			dirSize = -1
+		}
+		diskUsage, err := directoryDiskUsage(path)
+		if err != nil {
+			return err
+		}
+		res = append(res, Properties{
+			Ref:       ref,
+			DiskUsage: diskUsage,
+			Size:      dirSize,
+		})
+		return nil
+	})
+	return res, err
+}
+
+func (lm *LayoutMapper) Clone(src name.Reference, dst name.Reference) error {
+	return duplicator.CloneDirectory(lm.refToDir(src), lm.refToDir(dst))
+}
+
+func (lm *LayoutMapper) Remove(src name.Reference) error {
+	ref, err := name.ParseReference(src.String(), name.StrictValidation)
+	if err != nil {
+		return fmt.Errorf("unable to valid reference: %w", err)
+	}
+	return os.RemoveAll(filepath.Join(lm.rootDir, lm.refToDir(ref)))
 }

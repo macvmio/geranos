@@ -1,5 +1,7 @@
 package image
 
+import "runtime"
+
 type options struct {
 	workersCount int
 	chunkSize    int64
@@ -9,7 +11,7 @@ type Option func(opts *options)
 
 func makeOptions(opts ...Option) *options {
 	res := &options{
-		workersCount: 8,
+		workersCount: max(8, runtime.NumCPU()),
 		chunkSize:    128 * 1024 * 1024,
 	}
 

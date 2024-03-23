@@ -7,24 +7,24 @@ import (
 	"github.com/tomekjarosik/geranos/pkg/transporter"
 )
 
-func createPullCommand() *cobra.Command {
-	var pullCmd = &cobra.Command{
-		Use:   "pull [image name]",
-		Short: "Pull an OCI image from a registry and extract the file.",
-		Long:  `Downloads an OCI image from a specified container registry and extracts the file to a specified local path.`,
-		Args:  cobra.ExactArgs(1),
+func createAdoptCommand() *cobra.Command {
+	var adoptCommand = &cobra.Command{
+		Use:   "adopt [dir name] [image name]",
+		Short: "Adopt directory under provided reference, which can be later used for other commands",
+		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			imagesDir := viper.GetString("images_directory")
 			if len(imagesDir) == 0 {
 				return errors.New("undefined image directory")
 			}
 			src := args[0]
+			ref := args[1]
 			opts := []transporter.Option{
 				transporter.WithImagesPath(imagesDir),
 			}
-			return transporter.Pull(src, opts...)
+			return transporter.Adopt(src, ref, opts...)
 		},
 	}
 
-	return pullCmd
+	return adoptCommand
 }
