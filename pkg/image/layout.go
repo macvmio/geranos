@@ -320,15 +320,18 @@ func IsDirWithOnlyFiles(path string) (bool, error) {
 	return true, nil // No subdirectories found, only files
 }
 
-func (lm *LayoutMapper) Adopt(src string, ref name.Reference) error {
+func (lm *LayoutMapper) Adopt(src string, ref name.Reference, failIfContainsSubdirectories bool) error {
 	isFlatDir, err := IsDirWithOnlyFiles(src)
 	if err != nil {
 		return fmt.Errorf("unable to verify if directory is flat: %w", err)
 	}
-	if !isFlatDir {
+	if !isFlatDir && failIfContainsSubdirectories {
 		return fmt.Errorf("directory with subdirectories are not supported")
 	}
-	return duplicator.CloneDirectory(src, lm.refToDir(ref))
+	if failIfContainsSubdirectories {
+		log.Printf("warning: subdirectories will be ignored")
+	}
+	return duplicator.CloneDirectory(src, lm.refToDir(ref), false)
 }
 
 type Properties struct {
@@ -389,7 +392,7 @@ func (lm *LayoutMapper) List() ([]Properties, error) {
 }
 
 func (lm *LayoutMapper) Clone(src name.Reference, dst name.Reference) error {
-	return duplicator.CloneDirectory(lm.refToDir(src), lm.refToDir(dst))
+	return duplicator.CloneDirectory(lm.refToDir(src), lm.refToDir(dst), true)
 }
 
 func (lm *LayoutMapper) Remove(src name.Reference) error {

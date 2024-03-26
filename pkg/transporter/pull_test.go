@@ -1,6 +1,7 @@
 package transporter
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"net/http/httptest"
 	"path/filepath"
@@ -28,5 +29,11 @@ func TestPullAndPush(t *testing.T) {
 	assert.NoError(t, err)
 
 	shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", ref, "disk.img"))
+	assert.Equal(t, shaBefore, shaAfter)
+
+	fmt.Println("expected cache:")
+	err = Pull(ref, opts...)
+	assert.NoError(t, err)
+	shaAfter = hashFromFile(t, filepath.Join(tempDir, "images", ref, "disk.img"))
 	assert.Equal(t, shaBefore, shaAfter)
 }

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-func CloneDirectory(srcDir, dstDir string) error {
+func CloneDirectory(srcDir, dstDir string, recursive bool) error {
 	// Read the contents of the source directory
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
@@ -22,10 +22,12 @@ func CloneDirectory(srcDir, dstDir string) error {
 		dstPath := filepath.Join(dstDir, entry.Name())
 
 		if entry.IsDir() {
-			// If the entry is a directory, recursively clone it
-			err = CloneDirectory(srcPath, dstPath)
-			if err != nil {
-				return err
+			if recursive {
+				// If the entry is a directory, recursively clone it
+				err = CloneDirectory(srcPath, dstPath, recursive)
+				if err != nil {
+					return err
+				}
 			}
 		} else {
 			// If the entry is a file, clone it

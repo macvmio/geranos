@@ -37,7 +37,7 @@ func WithMountedReference(ref name.Reference) Option {
 func makeOptions(opts ...Option) *options {
 	res := options{
 		imagesPath:       mustExpandUser("~/.geranos/images"),
-		cachePath:        "",
+		cachePath:        mustExpandUser("~/.geranos/cache"),
 		mountedReference: nil,
 		insecure:         false,
 		remoteOptions:    nil,

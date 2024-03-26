@@ -13,5 +13,5 @@ func Adopt(src string, dst string, opt ...Option) error {
 		return fmt.Errorf("unable to parse reference: %w", err)
 	}
 	lm := image.NewLayoutMapper(opts.imagesPath)
-	return lm.Adopt(src, dstRef)
+	return lm.Adopt(src, dstRef, false)
 }
