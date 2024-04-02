@@ -125,10 +125,10 @@ func FromFile(name string, opts ...LayerOpt) (*Layer, error) {
 	for _, o := range opts {
 		o(pfl)
 	}
-	if stop >= info.Size() {
+	if pfl.stop >= info.Size() {
 		return nil, errors.New("provided 'stop' is outside of file size")
 	}
-	if start < 0 || start > stop {
+	if pfl.start < 0 || pfl.start > pfl.stop {
 		return nil, errors.New("provided 'start' index is out of range")
 	}
 	return pfl, nil
