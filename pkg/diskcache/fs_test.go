@@ -2,19 +2,21 @@ package diskcache
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"github.com/google/go-containerregistry/pkg/v1/cache"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/stream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tomekjarosik/geranos/pkg/image/segmentlayer"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func Test_FSCache_Put(t *testing.T) {
+func Test_FSCache_Put_Compressed(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "diskcache-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -54,7 +56,7 @@ func Test_FSCache_Put(t *testing.T) {
 	}
 }
 
-func Test_FSCache_PutAndGet(t *testing.T) {
+func Test_FSCache_PutAndGet_Uncompressed_WithTarCompressed(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "diskcache-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -85,6 +87,150 @@ func Test_FSCache_PutAndGet(t *testing.T) {
 		diffID, err := layers[layerID].DiffID()
 		require.NoError(t, err)
 		lCache, err = c.Get(diffID)
+		require.NoError(t, err)
+
+		digest, err := layers[layerID].Digest()
+		lCache, err = c.Get(digest)
+		// random.Image() generates tar compression, which is not supported as fscache uses zstd
+		// so the layer cannot be found
+		require.ErrorIs(t, err, cache.ErrNotFound)
+	}
+}
+
+// Compressed at source is not supported
+/*
+func Test_FSCache_PutAndGet_CompressedAtSource(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "diskcache-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	c := NewFilesystemCache(tempDir)
+
+	img, err := random.Image(1024*100, 8)
+	require.NoError(t, err)
+
+	layers, err := img.Layers()
+	require.NoError(t, err)
+
+	for layerID := 0; layerID < 8; layerID++ {
+
+		lCache, err := c.Put(layers[layerID])
+		require.NoError(t, err)
+		assert.NotNil(t, lCache)
+
+		if comp, err := lCache.Compressed(); err != nil {
+			t.Errorf("Compressed: %v", err)
+		} else {
+			if _, err := io.Copy(io.Discard, comp); err != nil {
+				t.Errorf("error reading compressed: %v", err)
+			}
+			err = comp.Close()
+			require.NoError(t, err)
+		}
+		diffID, err := layers[layerID].DiffID()
+		require.NoError(t, err)
+		lCache, err = c.Get(diffID)
+		require.NoError(t, err)
+
+		digest, err := layers[layerID].Digest()
+		lCache, err = c.Get(digest)
+		require.NoError(t, err)
+	}
+}
+*/
+
+// GenerateRandomFile creates a file of the specified size filled with random bytes
+// using io.CopyN for efficient copying.
+func generateRandomFile(fileName string, size int64) error {
+	// Open a file for writing, creating it with 0666 permissions if it does not exist
+	file, err := os.Create(fileName)
+	if err != nil {
+		return fmt.Errorf("error creating file: %w", err)
+	}
+	defer file.Close()
+
+	// Copy the specified amount of random data to the file
+	// rand.Reader is a global, shared instance of a cryptographically secure random number generator
+	if _, err := io.CopyN(file, rand.Reader, size); err != nil {
+		return fmt.Errorf("error copying random data to file: %w", err)
+	}
+
+	return nil
+}
+
+// Compressed at source is not supported
+/*
+func Test_FSCache_PutAndGet_Compressed_WithZstdCompressionAtSource(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "diskcache-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+	diskImgFilename := filepath.Join(tempDir, "testdisk.img")
+	err = generateRandomFile(diskImgFilename, 8*128*1024)
+	require.NoError(t, err)
+
+	c := NewFilesystemCache(tempDir)
+
+	for layerID := 0; layerID < 8; layerID++ {
+		layer, err := segmentlayer.FromFile(diskImgFilename, segmentlayer.WithRange(int64(layerID*128*1024), int64((layerID+1)*128*1024)-1))
+		require.NoError(t, err)
+		lCache, err := c.Put(layer)
+		require.NoError(t, err)
+		assert.NotNil(t, lCache)
+
+		if comp, err := lCache.Compressed(); err != nil {
+			t.Errorf("Compressed: %v", err)
+		} else {
+			if _, err := io.Copy(io.Discard, comp); err != nil {
+				t.Errorf("error reading compressed: %v", err)
+			}
+			err = comp.Close()
+			require.NoError(t, err)
+		}
+		diffID, err := layer.DiffID()
+		require.NoError(t, err)
+		lCache, err = c.Get(diffID)
+		require.NoError(t, err)
+
+		digest, err := layer.Digest()
+		lCache, err = c.Get(digest)
+		require.NoError(t, err)
+	}
+}
+*/
+
+func Test_FSCache_PutAndGet_Uncompressed_WithZstdCompressionAtSource(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "diskcache-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+	diskImgFilename := filepath.Join(tempDir, "testdisk.img")
+	err = generateRandomFile(diskImgFilename, 10000)
+	require.NoError(t, err)
+
+	c := NewFilesystemCache(tempDir)
+
+	for layerID := 0; layerID < 8; layerID++ {
+		layer, err := segmentlayer.FromFile(diskImgFilename, segmentlayer.WithRange(int64(layerID*1024), int64((layerID+1)*1024)))
+		require.NoError(t, err)
+		lCache, err := c.Put(layer)
+		require.NoError(t, err)
+		assert.NotNil(t, lCache)
+
+		if comp, err := lCache.Uncompressed(); err != nil {
+			t.Errorf("Compressed: %v", err)
+		} else {
+			if _, err := io.Copy(io.Discard, comp); err != nil {
+				t.Errorf("error reading compressed: %v", err)
+			}
+			err = comp.Close()
+			require.NoError(t, err)
+		}
+		diffID, err := layer.DiffID()
+		require.NoError(t, err)
+		lCache, err = c.Get(diffID)
+		require.NoError(t, err)
+
+		digest, err := layer.Digest()
+		lCache, err = c.Get(digest)
 		require.NoError(t, err)
 	}
 }
@@ -135,8 +281,9 @@ func TestFscache_Put_GetFromCorruptedFile(t *testing.T) {
 	require.NoError(t, err)
 	lCache, err = c.Get(diffID)
 	require.NoError(t, err)
+	digest, err := layers[0].Digest()
 
-	err = corruptFile(filepath.Join(tempDir, diffID.String()))
+	err = corruptFile(filepath.Join(tempDir, digest.String()))
 	require.NoError(t, err)
 
 	lCache, err = c.Get(diffID)

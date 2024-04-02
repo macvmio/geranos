@@ -1,17 +1,16 @@
 package diskcache
 
 import (
+	"errors"
 	"fmt"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/cache"
-	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/types"
-	"github.com/klauspost/compress/zstd"
+	"github.com/tomekjarosik/geranos/pkg/image/segmentlayer"
+	"github.com/tomekjarosik/geranos/pkg/image/sparsefile"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
 type fscache struct {
@@ -30,37 +29,27 @@ type teeLayer struct {
 	digest, diffID v1.Hash
 }
 
-func (l *teeLayer) create(h v1.Hash) (io.WriteCloser, error) {
+func (l *teeLayer) create(digest v1.Hash, diffID v1.Hash) (io.WriteCloser, error) {
 	if err := os.MkdirAll(l.path, 0700); err != nil {
 		return nil, fmt.Errorf("unable to create directories: %w", err)
 	}
-	fmt.Printf("teeLayer::create %v\n", cachepath(l.path, h))
-	f, err := os.Create(cachepath(l.path, h))
+	f, err := os.Create(cachepath(l.path, digest))
 	if err != nil {
 		return nil, fmt.Errorf("unable to create file: %w", err)
 	}
-	return zstd.NewWriter(f)
+	err = os.WriteFile(cachepath(l.path, diffID)+".link", []byte(digest.String()), 0644)
+	if err != nil {
+		return nil, err
+	}
+	return sparsefile.NewWriter(f), nil
 }
 
 func (l *teeLayer) Compressed() (io.ReadCloser, error) {
-	fmt.Printf("teeLayer::Compressed\n")
-	f, err := l.create(l.digest)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create cached layer: %w", err)
-	}
-	rc, err := l.Layer.Compressed()
-	if err != nil {
-		return nil, fmt.Errorf("unable to get compressed layer: %w", err)
-	}
-	return &readcloser{
-		t:      io.TeeReader(rc, f),
-		closes: []func() error{rc.Close, f.Close},
-	}, nil
+	return nil, errors.New("unsupported")
 }
 
 func (l *teeLayer) Uncompressed() (io.ReadCloser, error) {
-	fmt.Printf("teeLayer::Uncompressed\n")
-	f, err := l.create(l.digest)
+	f, err := l.create(l.digest, l.diffID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create cached layer: %w", err)
 	}
@@ -103,7 +92,6 @@ func (fs *fscache) Put(l v1.Layer) (v1.Layer, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("fscache::Put(digest=%s, diffId=%s\n", digest.String(), diffID.String())
 	return &teeLayer{
 		Layer:  l,
 		path:   fs.path,
@@ -112,65 +100,42 @@ func (fs *fscache) Put(l v1.Layer) (v1.Layer, error) {
 	}, nil
 }
 
-type alwaysCompressedLayer struct {
-	filename       string
-	compressedOnce sync.Once
-	hash           v1.Hash
-	size           int64
-	hashSizeError  error
-}
-
-func (nl *alwaysCompressedLayer) Digest() (v1.Hash, error) {
-	nl.calcSizeHash()
-	return nl.hash, nl.hashSizeError
-}
-
-func (nl *alwaysCompressedLayer) calcSizeHash() {
-	nl.compressedOnce.Do(func() {
-		var r io.ReadCloser
-		r, nl.hashSizeError = nl.Compressed()
-		if nl.hashSizeError != nil {
-			return
-		}
-		defer r.Close()
-		nl.hash, nl.size, nl.hashSizeError = v1.SHA256(r)
-		log.Printf("%v: calculated compressed layer hash", nl)
-	})
-}
-
-func (nl *alwaysCompressedLayer) Compressed() (io.ReadCloser, error) {
-	fmt.Printf("alwaysCompressedLayer::Compressed()")
-	return os.Open(nl.filename)
-}
-
-func (nl *alwaysCompressedLayer) Size() (int64, error) {
-	fi, err := os.Stat(nl.filename)
-	if err != nil {
-		return 0, err
-	}
-	return fi.Size(), err
-}
-
-func (nl *alwaysCompressedLayer) MediaType() (types.MediaType, error) {
-	return "", nil // TODO:
-}
-
 func (fs *fscache) Get(h v1.Hash) (v1.Layer, error) {
-	fmt.Printf("fscache::Get(%s)\n", h.String())
-	_, err := os.Open(cachepath(fs.path, h))
-
+	// hash could be Digest (recommended) or DiffId (fallback)
+	shaFilename := cachepath(fs.path, h)
+	f, err := os.Open(shaFilename)
+	defer f.Close()
+	isDigest := true
 	if os.IsNotExist(err) {
-		fmt.Printf("cache.ErrNoFound: %v\n", err)
-		return nil, cache.ErrNotFound
+		// Is not a "Digest" fallback to uncompressed layer: .link
+		linkContent, err2 := os.ReadFile(shaFilename + ".link")
+		if os.IsNotExist(err2) {
+			fmt.Println("cache.ErrNotFound")
+			return nil, cache.ErrNotFound
+		}
+		if err2 != nil {
+			return nil, err2
+		}
+		shaFilename = filepath.Join(fs.path, string(linkContent))
+		isDigest = false
+		err = nil
 	}
-	l, err := partial.CompressedToLayer(&alwaysCompressedLayer{filename: cachepath(fs.path, h)})
+	l, err := segmentlayer.FromFile(shaFilename)
 	if err != nil {
 		return nil, err
 	}
-	hashCalculated, err := l.Digest()
+	var hashCalculated v1.Hash
+	if isDigest {
+		hashCalculated, err = l.Digest()
+	} else {
+		hashCalculated, err = l.DiffID()
+	}
+	if err != nil {
+		return nil, err
+	}
 	// Below code handle cases of when cache is corrupted
-	if err != nil || hashCalculated != h {
-		fmt.Printf("error in cache impl")
+	if hashCalculated != h {
+		fmt.Printf("isDigest=%v, expected hash %v, got corrupted hash %v, shaFilename: %v", isDigest, h, hashCalculated, shaFilename)
 		if err := fs.Delete(h); err != nil {
 			return nil, err
 		}
