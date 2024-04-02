@@ -27,8 +27,7 @@ func ReadCloserLevel(r io.ReadCloser, level int) io.ReadCloser {
 	// to a registry, we want to ensure that we're taking full advantage of
 	// the available bandwidth instead of sending tons of tiny writes over
 	// the wire.
-	// 64K ought to be small enough for anybody.
-	bw := bufio.NewWriterSize(pw, 2<<16)
+	bw := bufio.NewWriterSize(pw, 1<<20)
 
 	// Returns err so we can pw.CloseWithError(err)
 	go func() error {
