@@ -1,13 +1,10 @@
 package transporter
 
 import (
-	"crypto/rand"
-	"fmt"
 	"github.com/google/go-containerregistry/pkg/registry"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -42,25 +39,6 @@ func makeFileAt(t *testing.T, filename, content string) {
 	defer f.Close()
 	_, err = f.Write([]byte(content))
 	assert.NoError(t, err)
-}
-
-// GenerateRandomFile creates a file of the specified size filled with random bytes
-// using io.CopyN for efficient copying.
-func generateRandomFile(fileName string, size int64) error {
-	// Open a file for writing, creating it with 0666 permissions if it does not exist
-	file, err := os.Create(fileName)
-	if err != nil {
-		return fmt.Errorf("error creating file: %w", err)
-	}
-	defer file.Close()
-
-	// Copy the specified amount of random data to the file
-	// rand.Reader is a global, shared instance of a cryptographically secure random number generator
-	if _, err := io.CopyN(file, rand.Reader, size); err != nil {
-		return fmt.Errorf("error copying random data to file: %w", err)
-	}
-
-	return nil
 }
 
 func makeTestVMAt(t *testing.T, tempDir, ref string) (sha string) {
