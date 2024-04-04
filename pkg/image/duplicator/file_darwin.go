@@ -1,5 +1,16 @@
 package duplicator
 
+import (
+	"os/exec"
+)
+
+// CloneFile attempts to clone a file using 'cp -c'
 func CloneFile(srcFile, dstFile string) error {
-	return apfs.CloneFile(srcFile, dstFile, apfs.CLONE_NOFOLLOW)
+	// Execute 'cp -c' to attempt efficient cloning
+	cmd := exec.Command("/bin/cp", "-c", srcFile, dstFile)
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	return nil
 }
