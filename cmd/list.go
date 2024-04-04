@@ -7,7 +7,7 @@ import (
 	"github.com/tomekjarosik/geranos/pkg/transporter"
 )
 
-func createListCommand() *cobra.Command {
+func NewListCommand() *cobra.Command {
 	var listCmd = &cobra.Command{
 		Use:   "list",
 		Short: "List all OCI images in a specific repository.",

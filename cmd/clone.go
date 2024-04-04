@@ -7,7 +7,7 @@ import (
 	"github.com/tomekjarosik/geranos/pkg/transporter"
 )
 
-func createCloneCommand() *cobra.Command {
+func NewCmdClone() *cobra.Command {
 	var cloneCmd = &cobra.Command{
 		Use:   "clone [src ref] [dst ref]",
 		Short: "Clone one reference to other name",

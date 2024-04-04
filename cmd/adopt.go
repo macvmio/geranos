@@ -7,7 +7,7 @@ import (
 	"github.com/tomekjarosik/geranos/pkg/transporter"
 )
 
-func createAdoptCommand() *cobra.Command {
+func NewCmdAdopt() *cobra.Command {
 	var adoptCommand = &cobra.Command{
 		Use:   "adopt [dir name] [image name]",
 		Short: "Adopt directory under provided reference, which can be later used for other commands",

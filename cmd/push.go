@@ -8,7 +8,7 @@ import (
 	"github.com/tomekjarosik/geranos/pkg/transporter"
 )
 
-func createPushCommand() *cobra.Command {
+func NewCmdPush() *cobra.Command {
 	var (
 		mountedReference string // Declares a variable to hold the value of the "--mountable-image" flag.
 	)

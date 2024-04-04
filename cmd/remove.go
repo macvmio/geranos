@@ -7,7 +7,7 @@ import (
 	"github.com/tomekjarosik/geranos/pkg/transporter"
 )
 
-func createRemoveCommand() *cobra.Command {
+func NewCmdRemove() *cobra.Command {
 	var removeCommand = &cobra.Command{
 		Use:   "remove [image ref]",
 		Short: "Remove locally stored image",

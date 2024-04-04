@@ -32,13 +32,17 @@ It relies on sparse files and Copy-on-Write filesystem features to optimize disk
 		fmt.Println("Use 'geranos --help' for a list of available commands.")
 	})
 
-	rootCmd.AddCommand(createPullCommand())
-	rootCmd.AddCommand(createPushCommand())
-	rootCmd.AddCommand(createInspectCommand())
-	rootCmd.AddCommand(createListCommand())
-	rootCmd.AddCommand(createAdoptCommand())
-	rootCmd.AddCommand(createCloneCommand())
-	rootCmd.AddCommand(createRemoveCommand())
+	rootCmd.AddCommand(
+		NewCmdPull(),
+		NewCmdPush(),
+		NewCmdInspect(),
+		NewListCommand(),
+		NewCmdAdopt(),
+		NewCmdClone(),
+		NewCmdRemove(),
+		NewCmdAuthLogin(),
+		NewCmdAuthLogout(),
+	)
 
 	return rootCmd
 }

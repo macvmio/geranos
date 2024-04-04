@@ -7,7 +7,7 @@ import (
 	"github.com/tomekjarosik/geranos/pkg/transporter"
 )
 
-func createInspectCommand() *cobra.Command {
+func NewCmdInspect() *cobra.Command {
 	var inspectCmd = &cobra.Command{
 		Use:   "inspect [image name]",
 		Short: "Inspect details of a specific OCI image.",

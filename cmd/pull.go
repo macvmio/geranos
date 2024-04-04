@@ -7,7 +7,7 @@ import (
 	"github.com/tomekjarosik/geranos/pkg/transporter"
 )
 
-func createPullCommand() *cobra.Command {
+func NewCmdPull() *cobra.Command {
 	var pullCmd = &cobra.Command{
 		Use:   "pull [image name]",
 		Short: "Pull an OCI image from a registry and extract the file.",
