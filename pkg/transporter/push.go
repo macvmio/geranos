@@ -2,10 +2,10 @@ package transporter
 
 import (
 	"fmt"
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/tomekjarosik/geranos/pkg/image"
+	"golang.org/x/sync/errgroup"
 )
 
 func Push(imageRef string, opt ...Option) error {
@@ -17,20 +17,33 @@ func Push(imageRef string, opt ...Option) error {
 		return err
 	}
 
-	authenticator, err := authn.DefaultKeychain.Resolve(ref.Context().Registry)
-	if err != nil {
-		return err
-	}
 	lm := image.NewLayoutMapper(opts.imagesPath)
 
-	img, err := lm.Read(ref)
+	img, err := lm.Read(opts.ctx, ref)
 	if err != nil {
 		return fmt.Errorf("unable to read image from disk: %w", err)
 	}
 	if opts.mountedReference != nil {
 		img = image.NewMountableImage(img, opts.mountedReference)
 	}
-	if err := remote.Write(ref, img, remote.WithAuth(authenticator)); err != nil {
+
+	layers, err := img.Layers()
+	if err != nil {
+		return fmt.Errorf("unable to extract layers from image: %w", err)
+	}
+	g, _ := errgroup.WithContext(opts.ctx)
+	g.SetLimit(opts.workersCount)
+	for _, l := range layers {
+		g.Go(func() error {
+			return remote.WriteLayer(ref.Context(), l, opts.remoteOptions...)
+		})
+	}
+	err = g.Wait()
+	if err != nil {
+		return fmt.Errorf("error occured while pushing layers concurrently: %w", err)
+	}
+
+	if err := remote.Write(ref, img, opts.remoteOptions...); err != nil {
 		return fmt.Errorf("unable to push image to registry: %w", err)
 	}
 	return nil
