@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"github.com/google/go-containerregistry/cmd/crane/cmd"
 	"github.com/spf13/cobra"
 	"os"
+	"os/signal"
 	"strings"
 )
 
@@ -42,15 +45,19 @@ It relies on sparse files and Copy-on-Write filesystem features to optimize disk
 		NewCmdRemove(),
 		NewCmdAuthLogin(),
 		NewCmdAuthLogout(),
+		NewCmdVersion(),
 	)
 
 	return rootCmd
 }
 
 func Execute(rootCmd *cobra.Command) {
-	rootCmd.Version = "v1"
-	if err := rootCmd.Execute(); err != nil {
+	rootCmd.Version = cmd.Version
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		cancel()
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-		os.Exit(-1)
+		os.Exit(1)
 	}
 }
