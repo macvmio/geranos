@@ -24,7 +24,7 @@ builds:
     goos:
       - linux
       - darwin
-      - windows
+# - windows - not supported yet
 source:
   enabled: true
 archives:
