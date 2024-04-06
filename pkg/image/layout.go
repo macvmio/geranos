@@ -13,13 +13,14 @@ import (
 	"github.com/tomekjarosik/geranos/pkg/image/sparsefile"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -31,6 +32,9 @@ const RangeAnnotationKey = "range"
 type LayoutMapper struct {
 	rootDir           string
 	sketchConstructor SketchConstructor
+
+	opts  *options
+	stats Statistics
 }
 
 type Layout struct {
@@ -39,21 +43,11 @@ type Layout struct {
 	Sizes     []int64
 }
 
-type SketchConstructor interface {
-	Construct(dir string, fileRecipes []*FileRecipe) error
-}
-
-type noopMakeshiftConstructor struct {
-}
-
-func (mc *noopMakeshiftConstructor) Construct(dir string, fileRecipes []*FileRecipe) error {
-	return nil
-}
-
-func NewLayoutMapper(rootDir string) *LayoutMapper {
+func NewLayoutMapper(rootDir string, opt ...Option) *LayoutMapper {
 	return &LayoutMapper{
 		rootDir:           rootDir,
-		sketchConstructor: &noopMakeshiftConstructor{},
+		sketchConstructor: NewSketchConstructor(rootDir),
+		opts:              makeOptions(opt...),
 	}
 }
 
@@ -61,7 +55,36 @@ func (lm *LayoutMapper) refToDir(ref name.Reference) string {
 	return filepath.Join(lm.rootDir, ref.String())
 }
 
-func (lm *LayoutMapper) writeLayer(destinationDir string, segment *FileSegmentRecipe, layer v1.Layer) (written int64, skipped int64, err error) {
+func (lm *LayoutMapper) contentMatches(destinationDir string, segment *fileSegmentRecipe) bool {
+	fname := filepath.Join(destinationDir, segment.Filename)
+	f, err := os.OpenFile(fname, os.O_RDONLY, 0666)
+	if err != nil {
+		return false
+	}
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			lm.opts.printf("error while closing file %v, got %v", segment.Filename, err)
+		}
+	}(f)
+	l, err := segmentlayer.FromFile(fname, segmentlayer.WithRange(segment.Start, segment.Stop))
+	if err != nil {
+		return false
+	}
+	d, err := l.Digest()
+	lm.stats.Add(&Statistics{
+		BytesReadCount: segment.Length(),
+	})
+	if err != nil {
+		return false
+	}
+	if d == segment.Digest {
+		return true
+	}
+	return false
+}
+
+func (lm *LayoutMapper) writeLayer(destinationDir string, segment *fileSegmentRecipe, layer v1.Layer) (written int64, skipped int64, err error) {
 	if layer == nil {
 		return 0, 0, errors.New("nil layer provided")
 	}
@@ -72,7 +95,7 @@ func (lm *LayoutMapper) writeLayer(destinationDir string, segment *FileSegmentRe
 	defer func(f *os.File) {
 		err := f.Close()
 		if err != nil {
-			log.Printf("error while closing file %v, got %v", segment.Filename, err)
+			lm.opts.printf("error while closing file %v, got %v", segment.Filename, err)
 		}
 	}(f)
 
@@ -89,8 +112,8 @@ func (lm *LayoutMapper) writeLayer(destinationDir string, segment *FileSegmentRe
 	return sparsefile.Copy(f, rc)
 }
 
-func (lm *LayoutMapper) Write(img v1.Image, ref name.Reference, progress chan ProgressUpdate) error {
-	recipes, err := CreateFileRecipesFromImage(img)
+func (lm *LayoutMapper) Write(img v1.Image, ref name.Reference) error {
+	recipes, err := createFileRecipesFromImage(img)
 	if err != nil {
 		return err
 	}
@@ -99,13 +122,15 @@ func (lm *LayoutMapper) Write(img v1.Image, ref name.Reference, progress chan Pr
 	if err != nil {
 		return err
 	}
-	err = lm.sketchConstructor.Construct(destinationDir, recipes)
+	scStats, err := lm.sketchConstructor.Construct(destinationDir, recipes)
 	if err != nil {
 		// TODO: ensure we don't delete anything useful _ = os.RemoveAll(destinationDir)
 		return err
 	}
+	lm.stats.Add(&scStats)
+
 	type Job struct {
-		Recipe FileSegmentRecipe
+		Recipe fileSegmentRecipe
 		Layer  v1.Layer
 	}
 	type JobResult struct {
@@ -113,7 +138,7 @@ func (lm *LayoutMapper) Write(img v1.Image, ref name.Reference, progress chan Pr
 		err error
 	}
 	var wg sync.WaitGroup
-	workersCount := min(8, runtime.NumCPU()) // TODO: make it configurable
+	workersCount := min(lm.opts.workersCount, runtime.NumCPU())
 	jobs := make(chan Job, workersCount)
 	results := make(chan JobResult, workersCount)
 
@@ -122,10 +147,25 @@ func (lm *LayoutMapper) Write(img v1.Image, ref name.Reference, progress chan Pr
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
-				written, skipped, err := lm.writeLayer(destinationDir, &job.Recipe, job.Layer)
-				log.Printf("written=%d, skipped=%d\n", written, skipped)
-				// TODO: Retry here up to configurable number of times
-				results <- JobResult{Job: job, err: err}
+				var jobErr error
+				for i := 0; i < lm.opts.networkFailureRetryCount; i++ {
+					if lm.contentMatches(destinationDir, &job.Recipe) {
+						break
+					}
+					written, skipped, err := lm.writeLayer(destinationDir, &job.Recipe, job.Layer)
+					lm.opts.printf("written=%d, skipped=%d\n", written, skipped)
+					lm.stats.Add(&Statistics{
+						BytesWrittenCount: written,
+						BytesSkippedCount: skipped,
+					})
+					// TODO: Check if written+skipped == (stop - start + 1)
+					if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
+						continue
+					}
+					jobErr = err
+					break
+				}
+				results <- JobResult{Job: job, err: jobErr}
 			}
 		}()
 	}
@@ -139,7 +179,7 @@ func (lm *LayoutMapper) Write(img v1.Image, ref name.Reference, progress chan Pr
 			for _, seg := range r.Segments {
 				l, err := img.LayerByDigest(seg.Digest)
 				if err != nil {
-					log.Printf("invalid seg.Digest")
+					lm.opts.printf("invalid seg.Digest")
 					l = nil
 				}
 				jobs <- Job{Recipe: seg, Layer: l}
@@ -200,6 +240,7 @@ func (lm *LayoutMapper) splitToLayers(fullpath string, chunkSize int64, workersC
 					// Precompute hashes concurrently
 					_, _ = l.DiffID()
 					_, _ = l.Digest()
+					atomic.AddInt64(&lm.stats.BytesReadCount, 2*(stop-start+1))
 				}
 			}
 		}()
@@ -231,24 +272,24 @@ func (lm *LayoutMapper) splitToLayers(fullpath string, chunkSize int64, workersC
 	return res, nil
 }
 
-func (lm *LayoutMapper) Read(ref name.Reference, opt ...Option) (v1.Image, error) {
+func (lm *LayoutMapper) Read(ref name.Reference) (v1.Image, error) {
 	img := empty.Image
 	img = mutate.ConfigMediaType(img, ConfigMediaType)
-	opts := makeOptions(opt...)
+
 	dirEntries, err := os.ReadDir(filepath.Join(lm.rootDir, ref.String()))
 	if err != nil {
 		return nil, err
 	}
 	for _, entry := range dirEntries {
 		if entry.IsDir() {
-			log.Printf("unexpected subdirectory '%v', skipping", entry.Name())
+			lm.opts.printf("unexpected subdirectory '%v', skipping", entry.Name())
 			continue
 		}
 		if strings.HasPrefix(entry.Name(), ".") {
-			log.Printf("skipping file '%v' because it starts with a dot", entry.Name())
+			lm.opts.printf("skipping file '%v' because it starts with a dot", entry.Name())
 			continue
 		}
-		layers, err := lm.splitToLayers(filepath.Join(lm.rootDir, ref.String(), entry.Name()), opts.chunkSize, opts.workersCount)
+		layers, err := lm.splitToLayers(filepath.Join(lm.rootDir, ref.String(), entry.Name()), lm.opts.chunkSize, lm.opts.workersCount)
 		if err != nil {
 			return nil, err
 		}
@@ -281,10 +322,10 @@ func (lm *LayoutMapper) Read(ref name.Reference, opt ...Option) (v1.Image, error
 		}
 		diffIDs = append(diffIDs, h)
 	}
+
 	return mutate.ConfigFile(img, &v1.ConfigFile{
-		Architecture: "arm64", // TODO
-		Author:       "TODO",
-		Container:    "geranos", // TODO: Rename whole package to 'Geranos'
+		Architecture: "arm64", // TODO:
+		Container:    "geranos",
 		Created:      v1.Time{Time: time.Now()},
 		OS:           "",
 		RootFS:       v1.RootFS{Type: "layers", DiffIDs: diffIDs},
@@ -329,7 +370,7 @@ func (lm *LayoutMapper) Adopt(src string, ref name.Reference, failIfContainsSubd
 		return fmt.Errorf("directory with subdirectories are not supported")
 	}
 	if failIfContainsSubdirectories {
-		log.Printf("warning: subdirectories will be ignored")
+		lm.opts.printf("warning: subdirectories will be ignored")
 	}
 	return duplicator.CloneDirectory(src, lm.refToDir(ref), false)
 }
@@ -401,4 +442,8 @@ func (lm *LayoutMapper) Remove(src name.Reference) error {
 		return fmt.Errorf("unable to valid reference: %w", err)
 	}
 	return os.RemoveAll(filepath.Join(lm.rootDir, lm.refToDir(ref)))
+}
+
+func (lm *LayoutMapper) Stats() Statistics {
+	return lm.stats
 }

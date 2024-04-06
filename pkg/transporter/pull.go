@@ -21,5 +21,5 @@ func Pull(src string, opt ...Option) error {
 	}
 	img = cache.Image(img, diskcache.NewFilesystemCache(opts.cachePath))
 	lm := image.NewLayoutMapper(opts.imagesPath)
-	return lm.Write(img, ref, make(chan image.ProgressUpdate))
+	return lm.Write(img, ref)
 }
