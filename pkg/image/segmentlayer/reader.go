@@ -2,6 +2,7 @@ package segmentlayer
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 )
@@ -22,6 +23,9 @@ func (pfr *partialFileReader) open() error {
 		return err
 	}
 	info, err := os.Stat(pfr.filename)
+	if err != nil {
+		return fmt.Errorf("unable to state a file '%v': %w", pfr.filename, err)
+	}
 	if pfr.stop >= info.Size() {
 		pfr.stop = info.Size() - 1
 	}
@@ -36,6 +40,12 @@ func (pfr *partialFileReader) open() error {
 	return nil
 }
 
+func (pfr *partialFileReader) Close() error {
+	err := pfr.f.Close()
+	pfr.f = nil
+	pfr.r = nil
+	return err
+}
 func (pfr *partialFileReader) Read(p []byte) (n int, err error) {
 	if pfr.r == nil {
 		err = pfr.open()
@@ -57,11 +67,4 @@ func (pfr *partialFileReader) Read(p []byte) (n int, err error) {
 	}
 	pfr.offset += int64(n)
 	return n, err
-}
-
-func (pfr *partialFileReader) Close() error {
-	err := pfr.f.Close()
-	pfr.f = nil
-	pfr.r = nil
-	return err
 }

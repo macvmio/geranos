@@ -14,7 +14,7 @@ func Inspect(rawRef string, opt ...Option) (string, error) {
 		return "", fmt.Errorf("unable to parse reference: %w", err)
 	}
 	lm := image.NewLayoutMapper(opts.imagesPath)
-	img, err := lm.Read(ref)
+	img, err := lm.Read(opts.ctx, ref)
 	if err != nil {
 		return "", fmt.Errorf("unable to read from ref %v: %w", ref, err)
 	}

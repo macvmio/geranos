@@ -22,6 +22,7 @@ func NewCmdInspect() *cobra.Command {
 			src := args[0]
 			opts := []transporter.Option{
 				transporter.WithImagesPath(imagesDir),
+				transporter.WithContext(cmd.Context()),
 			}
 			out, err := transporter.Inspect(src, opts...)
 			if err != nil {

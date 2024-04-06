@@ -28,6 +28,7 @@ func NewCmdPush() *cobra.Command {
 			src := args[0]
 			opts := []transporter.Option{
 				transporter.WithImagesPath(imagesDir),
+				transporter.WithContext(cmd.Context()),
 			}
 
 			// Since mountedReference is directly bound to the flag,

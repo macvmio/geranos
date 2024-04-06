@@ -1,6 +1,7 @@
 package image
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -11,6 +12,7 @@ import (
 	"github.com/tomekjarosik/geranos/pkg/image/duplicator"
 	"github.com/tomekjarosik/geranos/pkg/image/segmentlayer"
 	"github.com/tomekjarosik/geranos/pkg/image/sparsefile"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"io/fs"
 	"os"
@@ -18,7 +20,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -112,7 +113,7 @@ func (lm *LayoutMapper) writeLayer(destinationDir string, segment *fileSegmentRe
 	return sparsefile.Copy(f, rc)
 }
 
-func (lm *LayoutMapper) Write(img v1.Image, ref name.Reference) error {
+func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Reference) error {
 	recipes, err := createFileRecipesFromImage(img)
 	if err != nil {
 		return err
@@ -137,15 +138,15 @@ func (lm *LayoutMapper) Write(img v1.Image, ref name.Reference) error {
 		Job Job
 		err error
 	}
-	var wg sync.WaitGroup
 	workersCount := min(lm.opts.workersCount, runtime.NumCPU())
 	jobs := make(chan Job, workersCount)
 	results := make(chan JobResult, workersCount)
 
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(workersCount)
+
 	for w := 0; w < workersCount; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		g.Go(func() error {
 			for job := range jobs {
 				var jobErr error
 				for i := 0; i < lm.opts.networkFailureRetryCount; i++ {
@@ -158,21 +159,20 @@ func (lm *LayoutMapper) Write(img v1.Image, ref name.Reference) error {
 						BytesWrittenCount: written,
 						BytesSkippedCount: skipped,
 					})
-					// TODO: Check if written+skipped == (stop - start + 1)
 					if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
 						continue
+					}
+					if err == nil && written+skipped != job.Recipe.Length() {
+						err = fmt.Errorf("invalid number of bytes written+skipped, got: %d, expected %d", written+skipped, job.Recipe.Length())
 					}
 					jobErr = err
 					break
 				}
 				results <- JobResult{Job: job, err: jobErr}
 			}
-		}()
+			return nil
+		})
 	}
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
 
 	go func() {
 		for _, r := range recipes {
@@ -187,9 +187,14 @@ func (lm *LayoutMapper) Write(img v1.Image, ref name.Reference) error {
 		}
 		close(jobs)
 	}()
+
+	go func() {
+		g.Wait()
+		close(results)
+	}()
 	for res := range results {
 		if res.err != nil {
-			return fmt.Errorf("failed writing to file '%v' at offset '%v': %w", res.Job.Recipe.Filename, res.Job.Recipe.Start, err)
+			return fmt.Errorf("failed writing to file '%v' at offset '%v': %w", res.Job.Recipe.Filename, res.Job.Recipe.Start, res.err)
 		}
 	}
 	rawManifest, err := img.RawManifest()
@@ -199,7 +204,7 @@ func (lm *LayoutMapper) Write(img v1.Image, ref name.Reference) error {
 	return os.WriteFile(filepath.Join(destinationDir, LocalManifestFilename), rawManifest, 0o777)
 }
 
-func (lm *LayoutMapper) splitToLayers(fullpath string, chunkSize int64, workersCount int) ([]*segmentlayer.Layer, error) {
+func (lm *LayoutMapper) splitToLayers(ctx context.Context, fullpath string, chunkSize int64, workersCount int) ([]*segmentlayer.Layer, error) {
 	f, err := os.Stat(fullpath)
 	if err != nil {
 		return nil, err
@@ -221,11 +226,11 @@ func (lm *LayoutMapper) splitToLayers(fullpath string, chunkSize int64, workersC
 	jobs := make(chan int64, workersCount)
 	results := make(chan layerResult, workersCount)
 
-	var wg sync.WaitGroup
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(workersCount)
+
 	for w := 0; w < workersCount; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		g.Go(func() error {
 			for start := range jobs {
 				stop := start + chunkSize - 1
 				if stop > maxIdx {
@@ -243,18 +248,25 @@ func (lm *LayoutMapper) splitToLayers(fullpath string, chunkSize int64, workersC
 					atomic.AddInt64(&lm.stats.BytesReadCount, 2*(stop-start+1))
 				}
 			}
-		}()
+			return nil
+		})
 	}
 	go func() {
+		defer close(jobs)
 		for start := int64(0); start <= maxIdx; start += chunkSize {
-			jobs <- start
+			select {
+			case jobs <- start:
+			case <-ctx.Done():
+				return // Exit if the context is canceled
+			}
 		}
-		close(jobs)
 	}()
+	// Closing the results channel after all workers are done
 	go func() {
-		wg.Wait()
+		g.Wait() // Wait for all Go routines in the errgroup to complete
 		close(results)
 	}()
+
 	sortedLayers := make([]layerResult, 0)
 	for r := range results {
 		if r.err != nil {
@@ -272,7 +284,7 @@ func (lm *LayoutMapper) splitToLayers(fullpath string, chunkSize int64, workersC
 	return res, nil
 }
 
-func (lm *LayoutMapper) Read(ref name.Reference) (v1.Image, error) {
+func (lm *LayoutMapper) Read(ctx context.Context, ref name.Reference) (v1.Image, error) {
 	img := empty.Image
 	img = mutate.ConfigMediaType(img, ConfigMediaType)
 
@@ -289,7 +301,7 @@ func (lm *LayoutMapper) Read(ref name.Reference) (v1.Image, error) {
 			lm.opts.printf("skipping file '%v' because it starts with a dot", entry.Name())
 			continue
 		}
-		layers, err := lm.splitToLayers(filepath.Join(lm.rootDir, ref.String(), entry.Name()), lm.opts.chunkSize, lm.opts.workersCount)
+		layers, err := lm.splitToLayers(ctx, filepath.Join(lm.rootDir, ref.String(), entry.Name()), lm.opts.chunkSize, lm.opts.workersCount)
 		if err != nil {
 			return nil, err
 		}

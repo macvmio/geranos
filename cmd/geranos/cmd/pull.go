@@ -21,6 +21,7 @@ func NewCmdPull() *cobra.Command {
 			src := args[0]
 			opts := []transporter.Option{
 				transporter.WithImagesPath(imagesDir),
+				transporter.WithContext(cmd.Context()),
 			}
 			return transporter.Pull(src, opts...)
 		},

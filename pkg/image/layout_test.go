@@ -1,6 +1,7 @@
 package image
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -31,7 +32,7 @@ func TestLayoutMapper_Read(t *testing.T) {
 	lm := NewLayoutMapper("testdata")
 	ref, err := name.ParseReference("vm1")
 	require.NoErrorf(t, err, "unable to parse reference: %v", err)
-	img, err := lm.Read(ref)
+	img, err := lm.Read(context.Background(), ref)
 	require.NoErrorf(t, err, "unable to read layout from disk: %v", err)
 	err = validate.Image(img, validate.Fast)
 	require.NoErrorf(t, err, "image validation error: %v", err)
@@ -53,13 +54,13 @@ func TestLayoutMapper_Read_VariousChunkSizes(t *testing.T) {
 
 	for chunkSize := int64(1); chunkSize < 10; chunkSize++ {
 		lmSrc := NewLayoutMapper("testdata", WithChunkSize(chunkSize))
-		img, err := lmSrc.Read(srcRef)
+		img, err := lmSrc.Read(context.Background(), srcRef)
 		require.NoErrorf(t, err, "unable to read image: %v", err)
 		err = validate.Image(img, validate.Fast)
 		if err != nil || img == nil {
 			t.Fatalf("img is not correct: %v", err)
 		}
-		err = lmDst.Write(img, dstRef)
+		err = lmDst.Write(context.Background(), img, dstRef)
 		require.NoErrorf(t, err, "unable to write image to destination: %v", err)
 		hashAfter := hashFromFile(t, filepath.Join(tempDir, dstRef.String(), "disk.blob"))
 		if hashBefore != hashAfter {
@@ -111,6 +112,7 @@ func appendRandomBytesToFile(filename string, numBytes int64) error {
 }
 
 func TestLayoutMapper_Write_MustOptimizeDiskSpace(t *testing.T) {
+	ctx := context.Background()
 	tempDir, err := os.MkdirTemp("", "optimized-disk-*")
 	if err != nil {
 		t.Fatalf("unable to create temp dir: %v", err)
@@ -132,13 +134,13 @@ func TestLayoutMapper_Write_MustOptimizeDiskSpace(t *testing.T) {
 	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1"))
 	require.NoErrorf(t, err, "unable to parse reference: %v", err)
 	lm := NewLayoutMapper(tempDir, WithChunkSize(chunkSize))
-	img1, err := lm.Read(srcRef)
+	img1, err := lm.Read(ctx, srcRef)
 	require.NoErrorf(t, err, "unable to read disk image: %v", err)
 	for i := 2; i < 12; i++ {
 		dir := fmt.Sprintf("oci.jarosik.online/testrepo/a:v%d", i)
 		r, err := name.ParseReference(dir)
 		require.NoErrorf(t, err, "unable to parse reference %d: %v", i, err)
-		err = lm.Write(img1, r)
+		err = lm.Write(ctx, img1, r)
 		require.NoErrorf(t, err, "unable to write image %d: %v", i, err)
 		err = duplicator.CloneDirectory(path.Join(testRepoDir, "a:v1"), path.Join(optimalRepoDir, fmt.Sprintf("a:v%d", i)), false)
 		require.NoErrorf(t, err, "unable to clone directory: %v", err)
@@ -157,6 +159,7 @@ func TestLayoutMapper_Write_MustOptimizeDiskSpace(t *testing.T) {
 }
 
 func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
+	ctx := context.Background()
 	tempDir, err := os.MkdirTemp("", "content-matches-*")
 	require.NoErrorf(t, err, "unable to create temp dir: %v", err)
 	defer os.RemoveAll(tempDir)
@@ -170,7 +173,7 @@ func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 
 	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1"))
 	require.NoErrorf(t, err, "unable to parse reference: %v", err)
-	img1, err := lm.Read(srcRef)
+	img1, err := lm.Read(ctx, srcRef)
 	require.NoErrorf(t, err, "unable to read disk image: %v", err)
 
 	if lm.stats.BytesReadCount != 2000 { // we read each byte twice to calculate diffID and digest
@@ -180,7 +183,7 @@ func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 	destRef, err := name.ParseReference("oci.jarosik.online/testrepo/a:v2")
 	require.NoErrorf(t, err, "unable to parse reference %v: %v", destRef, err)
 
-	err = lm.Write(img1, destRef)
+	err = lm.Write(ctx, img1, destRef)
 	require.NoErrorf(t, err, "unable to write image %v: %v", destRef, err)
 
 	assert.Equal(t, int64(1000), lm.stats.BytesWrittenCount)
@@ -189,7 +192,7 @@ func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 	destRef3, err := name.ParseReference("oci.jarosik.online/testrepo/a:v3")
 	require.NoErrorf(t, err, "unable to parse reference %v: %v", destRef3, err)
 
-	err = lm.Write(img1, destRef3)
+	err = lm.Write(ctx, img1, destRef3)
 	require.NoErrorf(t, err, "unable to write image %v: %v", destRef, err)
 	assert.Equal(t, int64(0), lm.stats.BytesWrittenCount)
 	assert.Equal(t, int64(1000), lm.stats.BytesReadCount)
@@ -200,6 +203,7 @@ func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 }
 
 func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t *testing.T) {
+	ctx := context.Background()
 	tempDir, err := os.MkdirTemp("", "content-matches-*")
 	require.NoErrorf(t, err, "unable to create temp dir: %v", err)
 	defer os.RemoveAll(tempDir)
@@ -214,7 +218,7 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 
 	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1"))
 	require.NoErrorf(t, err, "unable to parse reference: %v", err)
-	img1, err := lm.Read(srcRef)
+	img1, err := lm.Read(ctx, srcRef)
 	require.NoErrorf(t, err, "unable to read disk image: %v", err)
 
 	if lm.stats.BytesReadCount != 2000 { // we read each byte twice to calculate diffID and digest
@@ -224,7 +228,7 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 	destRef, err := name.ParseReference("oci.jarosik.online/testrepo/a:v2")
 	require.NoErrorf(t, err, "unable to parse reference %v: %v", destRef, err)
 
-	err = lm.Write(img1, destRef)
+	err = lm.Write(ctx, img1, destRef)
 	require.NoErrorf(t, err, "unable to write image %v: %v", destRef, err)
 
 	assert.Equal(t, int64(1000), lm.stats.BytesWrittenCount)
@@ -257,7 +261,7 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 	})
 	require.NoError(t, err)
 
-	err = lm.Write(img3, destRef3)
+	err = lm.Write(ctx, img3, destRef3)
 	require.NoErrorf(t, err, "unable to write image %v: %v", destRef, err)
 	assert.Equal(t, int64(20), lm.stats.BytesWrittenCount)
 	assert.Equal(t, int64(1020), lm.stats.BytesReadCount)

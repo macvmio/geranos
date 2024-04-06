@@ -16,7 +16,6 @@ import (
 const FileSegmentMediaType = types.MediaType("application/online.jarosik.tomasz.geranos.segment")
 
 type Layer struct {
-	// v1.Layer
 	filename  string
 	start     int64
 	stop      int64
@@ -29,6 +28,8 @@ type Layer struct {
 	compressedOnce   sync.Once
 	uncompressedOnce sync.Once
 }
+
+var _ v1.Layer = (*Layer)(nil)
 
 func (pfl *Layer) DiffID() (v1.Hash, error) {
 	pfl.uncompressedOnce.Do(func() {
