@@ -26,9 +26,9 @@ import (
 )
 
 const LocalManifestFilename = ".oci.manifest.json"
-const ConfigMediaType = types.MediaType("application/online.jarosik.tomasz.v1.config+json")
 const FilenameAnnotationKey = "filename"
 const RangeAnnotationKey = "range"
+const ConfigMediaType = types.MediaType("application/online.jarosik.tomasz.v1.config+json")
 
 type LayoutMapper struct {
 	rootDir           string
@@ -143,7 +143,6 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 	results := make(chan JobResult, workersCount)
 
 	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(workersCount)
 
 	for w := 0; w < workersCount; w++ {
 		g.Go(func() error {
@@ -174,24 +173,33 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 		})
 	}
 
-	go func() {
+	g.Go(func() error {
+		defer close(jobs)
 		for _, r := range recipes {
 			for _, seg := range r.Segments {
-				l, err := img.LayerByDigest(seg.Digest)
-				if err != nil {
-					lm.opts.printf("invalid seg.Digest")
-					l = nil
+				select {
+				case <-ctx.Done():
+					return ctx.Err() // Early return on context cancellation.
+				default:
+					l, err := img.LayerByDigest(seg.Digest)
+					if err != nil {
+						lm.opts.printf("invalid seg.Digest")
+						l = nil
+					}
+					jobs <- Job{Recipe: seg, Layer: l}
 				}
-				jobs <- Job{Recipe: seg, Layer: l}
 			}
 		}
-		close(jobs)
-	}()
-
+		return nil
+	})
 	go func() {
-		g.Wait()
+		err = g.Wait()
+		if err != nil {
+			fmt.Println(err)
+		}
 		close(results)
 	}()
+
 	for res := range results {
 		if res.err != nil {
 			return fmt.Errorf("failed writing to file '%v' at offset '%v': %w", res.Job.Recipe.Filename, res.Job.Recipe.Start, res.err)
@@ -207,7 +215,7 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 func (lm *LayoutMapper) splitToLayers(ctx context.Context, fullpath string, chunkSize int64, workersCount int) ([]*segmentlayer.Layer, error) {
 	f, err := os.Stat(fullpath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("faild to stat file '%v': %w", fullpath, err)
 	}
 	if f.Size() < chunkSize {
 		l, err := segmentlayer.FromFile(fullpath)
@@ -227,8 +235,6 @@ func (lm *LayoutMapper) splitToLayers(ctx context.Context, fullpath string, chun
 	results := make(chan layerResult, workersCount)
 
 	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(workersCount)
-
 	for w := 0; w < workersCount; w++ {
 		g.Go(func() error {
 			for start := range jobs {
@@ -251,19 +257,20 @@ func (lm *LayoutMapper) splitToLayers(ctx context.Context, fullpath string, chun
 			return nil
 		})
 	}
-	go func() {
+	g.Go(func() error {
 		defer close(jobs)
 		for start := int64(0); start <= maxIdx; start += chunkSize {
 			select {
-			case jobs <- start:
+			case jobs <- start: // this blocks here waiting for a worker to pick up a job
 			case <-ctx.Done():
-				return // Exit if the context is canceled
+				return ctx.Err() // Exit if the context is canceled
 			}
 		}
-	}()
-	// Closing the results channel after all workers are done
+		return nil
+	})
+
 	go func() {
-		g.Wait() // Wait for all Go routines in the errgroup to complete
+		g.Wait()
 		close(results)
 	}()
 
@@ -287,10 +294,10 @@ func (lm *LayoutMapper) splitToLayers(ctx context.Context, fullpath string, chun
 func (lm *LayoutMapper) Read(ctx context.Context, ref name.Reference) (v1.Image, error) {
 	img := empty.Image
 	img = mutate.ConfigMediaType(img, ConfigMediaType)
-
-	dirEntries, err := os.ReadDir(filepath.Join(lm.rootDir, ref.String()))
+	resolveDir := filepath.Join(lm.rootDir, ref.String())
+	dirEntries, err := os.ReadDir(resolveDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to read directory: '%v': %w", resolveDir, err)
 	}
 	for _, entry := range dirEntries {
 		if entry.IsDir() {
@@ -301,9 +308,9 @@ func (lm *LayoutMapper) Read(ctx context.Context, ref name.Reference) (v1.Image,
 			lm.opts.printf("skipping file '%v' because it starts with a dot", entry.Name())
 			continue
 		}
-		layers, err := lm.splitToLayers(ctx, filepath.Join(lm.rootDir, ref.String(), entry.Name()), lm.opts.chunkSize, lm.opts.workersCount)
+		layers, err := lm.splitToLayers(ctx, filepath.Join(resolveDir, entry.Name()), lm.opts.chunkSize, lm.opts.workersCount)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("splitting to layers failed: %w", err)
 		}
 		addendums := make([]mutate.Addendum, 0)
 		for _, l := range layers {
