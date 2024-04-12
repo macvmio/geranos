@@ -1,4 +1,4 @@
-package segmentlayer
+package filesegment
 
 import (
 	"errors"
@@ -13,10 +13,10 @@ import (
 	"sync"
 )
 
-const FileSegmentMediaType = types.MediaType("application/online.jarosik.tomasz.geranos.segment")
+const MediaType = types.MediaType("application/online.jarosik.tomasz.geranos.segment")
 
 type Layer struct {
-	filename  string
+	filePath  string
 	start     int64
 	stop      int64
 	mediaType types.MediaType
@@ -51,7 +51,7 @@ func (pfl *Layer) DiffID() (v1.Hash, error) {
 // Uncompressed implements v1.Layer
 func (pfl *Layer) Uncompressed() (io.ReadCloser, error) {
 	rc := &partialFileReader{
-		filename: pfl.filename,
+		filePath: pfl.filePath,
 		start:    pfl.start,
 		stop:     pfl.stop,
 		offset:   0,
@@ -99,7 +99,7 @@ func (pfl *Layer) Size() (int64, error) {
 }
 
 func (pfl *Layer) String() string {
-	return fmt.Sprintf("layer from '%v' range[%v-%v]", filepath.Base(pfl.filename), pfl.start, pfl.stop)
+	return fmt.Sprintf("layer from '%v' range[%v-%v]", filepath.Base(pfl.filePath), pfl.start, pfl.stop)
 }
 
 func (pfl *Layer) Start() int64 {
@@ -110,18 +110,29 @@ func (pfl *Layer) Stop() int64 {
 	return pfl.stop
 }
 
-func FromFile(name string, opts ...LayerOpt) (*Layer, error) {
+func (pfl *Layer) GetMediaType() types.MediaType {
+	return pfl.mediaType
+}
+
+func (pfl *Layer) Annotations() map[string]string {
+	return map[string]string{
+		FilenameAnnotationKey: filepath.Base(pfl.filePath),
+		RangeAnnotationKey:    fmt.Sprintf("%d-%d", pfl.start, pfl.stop),
+	}
+}
+
+func NewLayer(filePath string, opts ...LayerOpt) (*Layer, error) {
 	start := int64(0)
-	info, err := os.Stat(name)
+	info, err := os.Stat(filePath)
 	if err != nil {
 		return nil, err
 	}
 	stop := info.Size() - 1
 	pfl := &Layer{
-		filename:  name,
+		filePath:  filePath,
 		start:     start,
 		stop:      stop,
-		mediaType: FileSegmentMediaType,
+		mediaType: MediaType,
 	}
 	for _, o := range opts {
 		o(pfl)

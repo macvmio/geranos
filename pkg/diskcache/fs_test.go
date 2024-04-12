@@ -9,7 +9,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/stream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tomekjarosik/geranos/pkg/image/segmentlayer"
+	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
 	"io"
 	"os"
 	"path/filepath"
@@ -171,7 +171,7 @@ func Test_FSCache_PutAndGet_Compressed_WithZstdCompressionAtSource(t *testing.T)
 	c := NewFilesystemCache(tempDir)
 
 	for layerID := 0; layerID < 8; layerID++ {
-		layer, err := segmentlayer.FromFile(diskImgFilename, segmentlayer.WithRange(int64(layerID*128*1024), int64((layerID+1)*128*1024)-1))
+		layer, err := filesegment.NewLayer(diskImgFilename, filesegment.WithRange(int64(layerID*128*1024), int64((layerID+1)*128*1024)-1))
 		require.NoError(t, err)
 		lCache, err := c.Put(layer)
 		require.NoError(t, err)
@@ -209,7 +209,7 @@ func Test_FSCache_PutAndGet_Uncompressed_WithZstdCompressionAtSource(t *testing.
 	c := NewFilesystemCache(tempDir)
 
 	for layerID := 0; layerID < 8; layerID++ {
-		layer, err := segmentlayer.FromFile(diskImgFilename, segmentlayer.WithRange(int64(layerID*1024), int64((layerID+1)*1024)))
+		layer, err := filesegment.NewLayer(diskImgFilename, filesegment.WithRange(int64(layerID*1024), int64((layerID+1)*1024)))
 		require.NoError(t, err)
 		lCache, err := c.Put(layer)
 		require.NoError(t, err)

@@ -1,4 +1,4 @@
-package segmentlayer
+package filesegment
 
 import (
 	"bufio"
@@ -8,7 +8,7 @@ import (
 )
 
 type partialFileReader struct {
-	filename string
+	filePath string
 	start    int64
 	stop     int64 // inclusive end of interval
 	offset   int64
@@ -18,13 +18,13 @@ type partialFileReader struct {
 }
 
 func (pfr *partialFileReader) open() error {
-	f, err := os.Open(pfr.filename)
+	f, err := os.Open(pfr.filePath)
 	if err != nil {
 		return err
 	}
-	info, err := os.Stat(pfr.filename)
+	info, err := os.Stat(pfr.filePath)
 	if err != nil {
-		return fmt.Errorf("unable to state a file '%v': %w", pfr.filename, err)
+		return fmt.Errorf("unable to state a file '%v': %w", pfr.filePath, err)
 	}
 	if pfr.stop >= info.Size() {
 		pfr.stop = info.Size() - 1

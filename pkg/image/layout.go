@@ -10,7 +10,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/tomekjarosik/geranos/pkg/image/duplicator"
-	"github.com/tomekjarosik/geranos/pkg/image/segmentlayer"
+	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
 	"github.com/tomekjarosik/geranos/pkg/image/sparsefile"
 	"golang.org/x/sync/errgroup"
 	"io"
@@ -26,8 +26,6 @@ import (
 )
 
 const LocalManifestFilename = ".oci.manifest.json"
-const FilenameAnnotationKey = "filename"
-const RangeAnnotationKey = "range"
 const ConfigMediaType = types.MediaType("application/online.jarosik.tomasz.v1.config+json")
 
 type LayoutMapper struct {
@@ -56,8 +54,8 @@ func (lm *LayoutMapper) refToDir(ref name.Reference) string {
 	return filepath.Join(lm.rootDir, ref.String())
 }
 
-func (lm *LayoutMapper) contentMatches(destinationDir string, segment *fileSegmentRecipe) bool {
-	fname := filepath.Join(destinationDir, segment.Filename)
+func (lm *LayoutMapper) contentMatches(destinationDir string, segment *filesegment.Descriptor) bool {
+	fname := filepath.Join(destinationDir, segment.Filename())
 	f, err := os.OpenFile(fname, os.O_RDONLY, 0666)
 	if err != nil {
 		return false
@@ -65,10 +63,10 @@ func (lm *LayoutMapper) contentMatches(destinationDir string, segment *fileSegme
 	defer func(f *os.File) {
 		err := f.Close()
 		if err != nil {
-			lm.opts.printf("error while closing file %v, got %v", segment.Filename, err)
+			lm.opts.printf("error while closing file %v, got %v", segment.Filename(), err)
 		}
 	}(f)
-	l, err := segmentlayer.FromFile(fname, segmentlayer.WithRange(segment.Start, segment.Stop))
+	l, err := filesegment.NewLayer(fname, filesegment.WithRange(segment.Start(), segment.Stop()))
 	if err != nil {
 		return false
 	}
@@ -79,28 +77,28 @@ func (lm *LayoutMapper) contentMatches(destinationDir string, segment *fileSegme
 	if err != nil {
 		return false
 	}
-	if d == segment.Digest {
+	if d == segment.Digest() {
 		return true
 	}
 	return false
 }
 
-func (lm *LayoutMapper) writeLayer(destinationDir string, segment *fileSegmentRecipe, layer v1.Layer) (written int64, skipped int64, err error) {
+func (lm *LayoutMapper) writeLayer(destinationDir string, segment *filesegment.Descriptor, layer v1.Layer) (written int64, skipped int64, err error) {
 	if layer == nil {
 		return 0, 0, errors.New("nil layer provided")
 	}
-	f, err := os.OpenFile(filepath.Join(destinationDir, segment.Filename), os.O_RDWR|os.O_CREATE, 0666)
+	f, err := os.OpenFile(filepath.Join(destinationDir, segment.Filename()), os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		return 0, 0, err
 	}
 	defer func(f *os.File) {
 		err := f.Close()
 		if err != nil {
-			lm.opts.printf("error while closing file %v, got %v", segment.Filename, err)
+			lm.opts.printf("error while closing file %v, got %v", segment.Filename(), err)
 		}
 	}(f)
 
-	_, err = f.Seek(segment.Start, io.SeekStart)
+	_, err = f.Seek(segment.Start(), io.SeekStart)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -131,8 +129,8 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 	lm.stats.Add(&scStats)
 
 	type Job struct {
-		Recipe fileSegmentRecipe
-		Layer  v1.Layer
+		Descriptor filesegment.Descriptor
+		Layer      v1.Layer
 	}
 	type JobResult struct {
 		Job Job
@@ -149,10 +147,10 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 			for job := range jobs {
 				var jobErr error
 				for i := 0; i < lm.opts.networkFailureRetryCount; i++ {
-					if lm.contentMatches(destinationDir, &job.Recipe) {
+					if lm.contentMatches(destinationDir, &job.Descriptor) {
 						break
 					}
-					written, skipped, err := lm.writeLayer(destinationDir, &job.Recipe, job.Layer)
+					written, skipped, err := lm.writeLayer(destinationDir, &job.Descriptor, job.Layer)
 					lm.opts.printf("written=%d, skipped=%d\n", written, skipped)
 					lm.stats.Add(&Statistics{
 						BytesWrittenCount: written,
@@ -161,8 +159,8 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 					if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
 						continue
 					}
-					if err == nil && written+skipped != job.Recipe.Length() {
-						err = fmt.Errorf("invalid number of bytes written+skipped, got: %d, expected %d", written+skipped, job.Recipe.Length())
+					if err == nil && written+skipped != job.Descriptor.Length() {
+						err = fmt.Errorf("invalid number of bytes written+skipped, got: %d, expected %d", written+skipped, job.Descriptor.Length())
 					}
 					jobErr = err
 					break
@@ -181,12 +179,12 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 				case <-ctx.Done():
 					return ctx.Err() // Early return on context cancellation.
 				default:
-					l, err := img.LayerByDigest(seg.Digest)
+					l, err := img.LayerByDigest(seg.Digest())
 					if err != nil {
 						lm.opts.printf("invalid seg.Digest")
 						l = nil
 					}
-					jobs <- Job{Recipe: seg, Layer: l}
+					jobs <- Job{Descriptor: *seg, Layer: l}
 				}
 			}
 		}
@@ -202,7 +200,7 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 
 	for res := range results {
 		if res.err != nil {
-			return fmt.Errorf("failed writing to file '%v' at offset '%v': %w", res.Job.Recipe.Filename, res.Job.Recipe.Start, res.err)
+			return fmt.Errorf("failed writing to file '%v' at offset '%v': %w", res.Job.Descriptor.Filename(), res.Job.Descriptor.Start(), res.err)
 		}
 	}
 	rawManifest, err := img.RawManifest()
@@ -212,21 +210,21 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 	return os.WriteFile(filepath.Join(destinationDir, LocalManifestFilename), rawManifest, 0o777)
 }
 
-func (lm *LayoutMapper) splitToLayers(ctx context.Context, fullpath string, chunkSize int64, workersCount int) ([]*segmentlayer.Layer, error) {
+func (lm *LayoutMapper) splitToLayers(ctx context.Context, fullpath string, chunkSize int64, workersCount int) ([]*filesegment.Layer, error) {
 	f, err := os.Stat(fullpath)
 	if err != nil {
 		return nil, fmt.Errorf("faild to stat file '%v': %w", fullpath, err)
 	}
 	if f.Size() < chunkSize {
-		l, err := segmentlayer.FromFile(fullpath)
+		l, err := filesegment.NewLayer(fullpath)
 		if err != nil {
 			return nil, err
 		}
-		return []*segmentlayer.Layer{l}, nil
+		return []*filesegment.Layer{l}, nil
 	}
 
 	type layerResult struct {
-		layer *segmentlayer.Layer
+		layer *filesegment.Layer
 		err   error
 	}
 
@@ -242,7 +240,7 @@ func (lm *LayoutMapper) splitToLayers(ctx context.Context, fullpath string, chun
 				if stop > maxIdx {
 					stop = maxIdx
 				}
-				l, err := segmentlayer.FromFile(fullpath, segmentlayer.WithRange(start, stop))
+				l, err := filesegment.NewLayer(fullpath, filesegment.WithRange(start, stop))
 				results <- layerResult{
 					layer: l,
 					err:   err,
@@ -284,7 +282,7 @@ func (lm *LayoutMapper) splitToLayers(ctx context.Context, fullpath string, chun
 	sort.Slice(sortedLayers, func(i, j int) bool {
 		return sortedLayers[i].layer.Start() < sortedLayers[j].layer.Start()
 	})
-	res := make([]*segmentlayer.Layer, 0)
+	res := make([]*filesegment.Layer, 0)
 	for _, r := range sortedLayers {
 		res = append(res, r.layer)
 	}
@@ -315,13 +313,10 @@ func (lm *LayoutMapper) Read(ctx context.Context, ref name.Reference) (v1.Image,
 		addendums := make([]mutate.Addendum, 0)
 		for _, l := range layers {
 			addendums = append(addendums, mutate.Addendum{
-				Layer:   l,
-				History: v1.History{},
-				Annotations: map[string]string{
-					FilenameAnnotationKey: entry.Name(),
-					RangeAnnotationKey:    fmt.Sprintf("%d-%d", l.Start(), l.Stop()),
-				},
-				MediaType: segmentlayer.FileSegmentMediaType,
+				Layer:       l,
+				History:     v1.History{},
+				Annotations: l.Annotations(),
+				MediaType:   l.GetMediaType(),
 			})
 		}
 		img, err = mutate.Append(img, addendums...)

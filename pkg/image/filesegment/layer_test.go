@@ -1,4 +1,4 @@
-package segmentlayer
+package filesegment
 
 import (
 	"fmt"
@@ -18,7 +18,7 @@ func TestLayer_AppendLayers(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	for i := 0; i < 4; i++ {
-		layer1, err := FromFile("testdata/disk.img", WithRange(int64(i*10), int64(i*10+9)))
+		layer1, err := NewLayer("testdata/disk.img", WithRange(int64(i*10), int64(i*10+9)))
 		if err != nil {
 			t.Errorf("unable to create layer out of input file from range 0-8")
 		}
@@ -62,7 +62,7 @@ func TestLayer_Functionality(t *testing.T) {
 
 	// Assuming testdata/disk.img exists and has content
 	layerFile := "testdata/disk.img"
-	layer, err := FromFile(layerFile)
+	layer, err := NewLayer(layerFile)
 	if err != nil {
 		t.Fatalf("unable to create layer from file %s: %v", layerFile, err)
 	}
@@ -93,7 +93,7 @@ func TestLayer_Functionality(t *testing.T) {
 
 	// Testing MediaType
 	mediaType, err := layer.MediaType()
-	if err != nil || mediaType != FileSegmentMediaType {
+	if err != nil || mediaType != MediaType {
 		t.Errorf("MediaType failed or returned unexpected value: %v, %v", err, mediaType)
 	}
 

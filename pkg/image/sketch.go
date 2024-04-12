@@ -4,6 +4,7 @@ import (
 	"fmt"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/tomekjarosik/geranos/pkg/image/duplicator"
+	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
 	"os"
 	"path/filepath"
 )
@@ -59,9 +60,9 @@ func (sc *defaultSketchConstructor) Construct(dir string, fileRecipes []*fileRec
 		// fr can easily have 1000 layers,
 		// each manifest can also have more than 1000 layers
 		// we need to compute best score in expected linear time
-		segmentsDigestMap := make(map[string]*fileSegmentRecipe)
+		segmentsDigestMap := make(map[string]*filesegment.Descriptor)
 		for _, seg := range fr.Segments {
-			segmentsDigestMap[seg.Digest.String()] = &seg
+			segmentsDigestMap[seg.Digest().String()] = seg
 		}
 		bestScore := 0
 		var bestCloneCandidate *cloneCandidate
@@ -139,7 +140,7 @@ func (sc *defaultSketchConstructor) findCloneCandidates() ([]*cloneCandidate, er
 	return candidates, nil
 }
 
-func (sc *defaultSketchConstructor) computeScore(segmentDigestMap map[string]*fileSegmentRecipe, m *cloneCandidate) int {
+func (sc *defaultSketchConstructor) computeScore(segmentDigestMap map[string]*filesegment.Descriptor, m *cloneCandidate) int {
 	score := 0
 	for _, descriptor := range m.descriptors {
 		_, ok := segmentDigestMap[descriptor.Digest.String()]

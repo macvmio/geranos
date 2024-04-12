@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tomekjarosik/geranos/pkg/image/duplicator"
-	"github.com/tomekjarosik/geranos/pkg/image/segmentlayer"
+	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
 	"io"
 	"os"
 	"path"
@@ -240,24 +240,18 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 	require.NoErrorf(t, err, "unable to parse reference %v: %v", destRef3, err)
 	err = appendRandomBytesToFile(randomFilename, 21)
 	require.NoError(t, err)
-	l1, err := segmentlayer.FromFile(randomFilename, segmentlayer.WithRange(1001, 1010))
+	l1, err := filesegment.NewLayer(randomFilename, filesegment.WithRange(1000, 1009))
 	require.NoError(t, err)
-	l2, err := segmentlayer.FromFile(randomFilename, segmentlayer.WithRange(1011, 1020))
+	l2, err := filesegment.NewLayer(randomFilename, filesegment.WithRange(1010, 1019))
 	require.NoError(t, err)
 	img3, err := mutate.Append(img1, mutate.Addendum{
-		Layer: l1,
-		Annotations: map[string]string{
-			FilenameAnnotationKey: filepath.Base(randomFilename),
-			RangeAnnotationKey:    fmt.Sprintf("%d-%d", l1.Start(), l1.Stop()),
-		},
-		MediaType: segmentlayer.FileSegmentMediaType,
+		Layer:       l1,
+		Annotations: l1.Annotations(),
+		MediaType:   filesegment.MediaType,
 	}, mutate.Addendum{
-		Layer: l2,
-		Annotations: map[string]string{
-			FilenameAnnotationKey: filepath.Base(randomFilename),
-			RangeAnnotationKey:    fmt.Sprintf("%d-%d", l2.Start(), l2.Stop()),
-		},
-		MediaType: segmentlayer.FileSegmentMediaType,
+		Layer:       l2,
+		Annotations: l2.Annotations(),
+		MediaType:   filesegment.MediaType,
 	})
 	require.NoError(t, err)
 
@@ -265,6 +259,6 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 	require.NoErrorf(t, err, "unable to write image %v: %v", destRef, err)
 	assert.Equal(t, int64(20), lm.stats.BytesWrittenCount)
 	assert.Equal(t, int64(1020), lm.stats.BytesReadCount)
-	assert.Equal(t, int64(1021), lm.stats.BytesClonedCount)
+	assert.Equal(t, int64(1020), lm.stats.BytesClonedCount)
 	assert.Equal(t, int64(100), lm.stats.MatchingSegmentsCount)
 }

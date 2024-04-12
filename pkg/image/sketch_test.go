@@ -6,6 +6,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
 	"os"
 	"path/filepath"
 	"testing"
@@ -46,14 +47,9 @@ func TestDefaultSketchConstructor_ConstructConstruct(t *testing.T) {
 		Digest v1.Hash
 	}
 	makeFR := func(filename string, seg ...Seg) fileRecipe {
-		segs := make([]fileSegmentRecipe, 0)
+		segs := make([]*filesegment.Descriptor, 0)
 		for _, s := range seg {
-			segs = append(segs, fileSegmentRecipe{
-				Filename: filename,
-				Start:    s.Start,
-				Stop:     s.Stop,
-				Digest:   s.Digest,
-			})
+			segs = append(segs, filesegment.NewDescriptor(filename, s.Start, s.Stop, s.Digest))
 		}
 		return fileRecipe{
 			Filename: filename,
@@ -224,16 +220,19 @@ func TestSketchConstructor_FindCloneCandidates(t *testing.T) {
 // TestComputeScore tests the computeScore method of defaultSketchConstructor for various scenarios.
 func TestSketchConstructor_ComputeScore(t *testing.T) {
 	// Define test cases
+	newDescriptor := func(hash string) *filesegment.Descriptor {
+		return filesegment.NewDescriptor("test", 0, 0, v1.Hash{Algorithm: "sha256", Hex: hash})
+	}
 	tests := []struct {
-		name           string
-		segmentRecipes map[string]*fileSegmentRecipe
-		descriptors    []*v1.Descriptor
-		expectedScore  int
+		name               string
+		segmentDescriptors map[string]*filesegment.Descriptor
+		descriptors        []*v1.Descriptor
+		expectedScore      int
 	}{
 		{
 			name: "No match - different hash",
-			segmentRecipes: map[string]*fileSegmentRecipe{
-				"hash1": {Digest: v1.Hash{Hex: "hash1"}},
+			segmentDescriptors: map[string]*filesegment.Descriptor{
+				"hash1": newDescriptor("hash1"),
 			},
 			descriptors: []*v1.Descriptor{
 				{Digest: v1.Hash{Hex: "hash2"}},
@@ -242,8 +241,8 @@ func TestSketchConstructor_ComputeScore(t *testing.T) {
 		},
 		{
 			name: "Single match",
-			segmentRecipes: map[string]*fileSegmentRecipe{
-				"sha256:hash1": {Digest: v1.Hash{Algorithm: "sha256", Hex: "hash1"}},
+			segmentDescriptors: map[string]*filesegment.Descriptor{
+				"sha256:hash1": newDescriptor("hash1"),
 			},
 			descriptors: []*v1.Descriptor{
 				{Digest: v1.Hash{Algorithm: "sha256", Hex: "hash1"}},
@@ -252,10 +251,10 @@ func TestSketchConstructor_ComputeScore(t *testing.T) {
 		},
 		{
 			name: "Multiple matches",
-			segmentRecipes: map[string]*fileSegmentRecipe{
-				"sha256:hash1": {Digest: v1.Hash{Algorithm: "sha256", Hex: "hash1"}},
-				"sha256:hash2": {Digest: v1.Hash{Algorithm: "sha256", Hex: "hash2"}},
-				"sha256:hash3": {Digest: v1.Hash{Algorithm: "sha256", Hex: "hash3"}},
+			segmentDescriptors: map[string]*filesegment.Descriptor{
+				"sha256:hash1": newDescriptor("hash1"),
+				"sha256:hash2": newDescriptor("hash2"),
+				"sha256:hash3": newDescriptor("hash3"),
 			},
 			descriptors: []*v1.Descriptor{
 				{Digest: v1.Hash{Algorithm: "sha256", Hex: "hash2"}},
@@ -266,13 +265,13 @@ func TestSketchConstructor_ComputeScore(t *testing.T) {
 		},
 		{
 			name: "Multiple matches - interleaving",
-			segmentRecipes: map[string]*fileSegmentRecipe{
-				"sha256:hash0": {Digest: v1.Hash{Algorithm: "sha256", Hex: "hash0"}},
-				"sha256:hash1": {Digest: v1.Hash{Algorithm: "sha256", Hex: "hash1"}},
-				"sha256:hash2": {Digest: v1.Hash{Algorithm: "sha256", Hex: "hash2"}},
-				"sha256:hash3": {Digest: v1.Hash{Algorithm: "sha256", Hex: "hash3"}},
-				"sha256:hash4": {Digest: v1.Hash{Algorithm: "sha256", Hex: "hash4"}},
-				"sha256:hash5": {Digest: v1.Hash{Algorithm: "sha256", Hex: "hash5"}},
+			segmentDescriptors: map[string]*filesegment.Descriptor{
+				"sha256:hash0": newDescriptor("hash0"),
+				"sha256:hash1": newDescriptor("hash1"),
+				"sha256:hash2": newDescriptor("hash2"),
+				"sha256:hash3": newDescriptor("hash3"),
+				"sha256:hash4": newDescriptor("hash4"),
+				"sha256:hash5": newDescriptor("hash5"),
 			},
 			descriptors: []*v1.Descriptor{
 				{Digest: v1.Hash{Algorithm: "sha256", Hex: "hash5"}},
@@ -284,9 +283,9 @@ func TestSketchConstructor_ComputeScore(t *testing.T) {
 		},
 		{
 			name: "Mismatch and match",
-			segmentRecipes: map[string]*fileSegmentRecipe{
-				"sha256:hash1": {Digest: v1.Hash{Hex: "hash1"}},
-				"sha256:hash4": {Digest: v1.Hash{Hex: "hash4"}},
+			segmentDescriptors: map[string]*filesegment.Descriptor{
+				"sha256:hash1": newDescriptor("hash1"),
+				"sha256:hash4": newDescriptor("hash4"),
 			},
 			descriptors: []*v1.Descriptor{
 				{Digest: v1.Hash{Algorithm: "sha256", Hex: "hash1"}},
@@ -304,8 +303,8 @@ func TestSketchConstructor_ComputeScore(t *testing.T) {
 			cc := cloneCandidate{
 				descriptors: tt.descriptors,
 			}
-			// Pass segmentRecipes map instead of sortedSegments slice
-			score := sc.computeScore(tt.segmentRecipes, &cc)
+			// Pass segmentDescriptors map instead of sortedSegments slice
+			score := sc.computeScore(tt.segmentDescriptors, &cc)
 			assert.Equal(t, tt.expectedScore, score)
 		})
 	}

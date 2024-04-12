@@ -6,7 +6,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/cache"
 	"github.com/google/go-containerregistry/pkg/v1/types"
-	"github.com/tomekjarosik/geranos/pkg/image/segmentlayer"
+	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
 	"github.com/tomekjarosik/geranos/pkg/image/sparsefile"
 	"io"
 	"os"
@@ -120,7 +120,7 @@ func (fs *fscache) Get(h v1.Hash) (v1.Layer, error) {
 		isDigest = false
 		err = nil
 	}
-	l, err := segmentlayer.FromFile(shaFilename)
+	l, err := filesegment.NewLayer(shaFilename)
 	if err != nil {
 		return nil, err
 	}

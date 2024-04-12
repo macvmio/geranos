@@ -1,4 +1,4 @@
-package segmentlayer
+package filesegment
 
 import (
 	"errors"
@@ -23,7 +23,7 @@ func TestPartialFileReaderOpen(t *testing.T) {
 
 	// Test opening the file
 	pfr := partialFileReader{
-		filename: tmpfile.Name(),
+		filePath: tmpfile.Name(),
 		start:    0,
 		stop:     int64(len("Hello, world")),
 	}
@@ -60,7 +60,7 @@ func TestPartialFileReaderRead(t *testing.T) {
 
 	// Instantiate partialFileReader
 	pfr := partialFileReader{
-		filename: tmpfile.Name(),
+		filePath: tmpfile.Name(),
 		start:    0,
 		stop:     int64(len(content)),
 	}
@@ -100,7 +100,7 @@ func TestPartialFileReadOnPartialContent(t *testing.T) {
 
 	// Instantiate partialFileReader for partial content
 	pfr := partialFileReader{
-		filename: tmpfile.Name(),
+		filePath: tmpfile.Name(),
 		start:    int64(len("Hello, ")),
 		stop:     int64(len("Hello, ") + len(partContent) - 1),
 	}
@@ -131,7 +131,7 @@ func TestPartialFileReaderEmptyFile(t *testing.T) {
 
 	// Instantiate partialFileReader for the empty file
 	pfr := partialFileReader{
-		filename: tmpfile.Name(),
+		filePath: tmpfile.Name(),
 		start:    0,
 		stop:     0,
 	}
@@ -166,7 +166,7 @@ func TestReadingBeyondStopPosition(t *testing.T) {
 
 	// Instantiate partialFileReader with 'stop' before the end of content
 	pfr := partialFileReader{
-		filename: tmpfile.Name(),
+		filePath: tmpfile.Name(),
 		start:    0,
 		stop:     int64(len("Hello,")) - 1, // Should stop before " Go!"
 	}

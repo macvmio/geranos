@@ -1,4 +1,4 @@
-package segmentlayer
+package filesegment
 
 import "github.com/google/go-containerregistry/pkg/v1/types"
 
