@@ -11,6 +11,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/tomekjarosik/geranos/pkg/image/duplicator"
 	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
+	"github.com/tomekjarosik/geranos/pkg/image/sketch"
 	"github.com/tomekjarosik/geranos/pkg/image/sparsefile"
 	"golang.org/x/sync/errgroup"
 	"io"
@@ -29,8 +30,8 @@ const LocalManifestFilename = ".oci.manifest.json"
 const ConfigMediaType = types.MediaType("application/online.jarosik.tomasz.v1.config+json")
 
 type LayoutMapper struct {
-	rootDir           string
-	sketchConstructor SketchConstructor
+	rootDir  string
+	sketcher *sketch.Sketcher
 
 	opts  *options
 	stats Statistics
@@ -44,9 +45,9 @@ type Layout struct {
 
 func NewLayoutMapper(rootDir string, opt ...Option) *LayoutMapper {
 	return &LayoutMapper{
-		rootDir:           rootDir,
-		sketchConstructor: NewSketchConstructor(rootDir),
-		opts:              makeOptions(opt...),
+		rootDir:  rootDir,
+		sketcher: sketch.NewSketcher(rootDir, LocalManifestFilename),
+		opts:     makeOptions(opt...),
 	}
 }
 
@@ -112,21 +113,23 @@ func (lm *LayoutMapper) writeLayer(destinationDir string, segment *filesegment.D
 }
 
 func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Reference) error {
-	recipes, err := createFileRecipesFromImage(img)
-	if err != nil {
-		return err
-	}
 	destinationDir := lm.refToDir(ref)
-	err = os.MkdirAll(destinationDir, 0o777)
+	err := os.MkdirAll(destinationDir, 0o777)
 	if err != nil {
 		return err
 	}
-	scStats, err := lm.sketchConstructor.Construct(destinationDir, recipes)
+
+	manifest, err := img.Manifest()
+	if err != nil {
+		return err
+	}
+
+	bytesClonedCount, matchedSegmentsCount, err := lm.sketcher.Sketch(destinationDir, *manifest)
 	if err != nil {
 		// TODO: ensure we don't delete anything useful _ = os.RemoveAll(destinationDir)
 		return err
 	}
-	lm.stats.Add(&scStats)
+	lm.stats.Add(&Statistics{BytesClonedCount: bytesClonedCount, MatchedSegmentsCount: matchedSegmentsCount})
 
 	type Job struct {
 		Descriptor filesegment.Descriptor
@@ -173,19 +176,21 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 
 	g.Go(func() error {
 		defer close(jobs)
-		for _, r := range recipes {
-			for _, seg := range r.Segments {
-				select {
-				case <-ctx.Done():
-					return ctx.Err() // Early return on context cancellation.
-				default:
-					l, err := img.LayerByDigest(seg.Digest())
-					if err != nil {
-						lm.opts.printf("invalid seg.Digest")
-						l = nil
-					}
-					jobs <- Job{Descriptor: *seg, Layer: l}
+		for _, l := range manifest.Layers {
+			d, err := filesegment.ParseDescriptor(l)
+			if err != nil {
+				return err
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err() // Early return on context cancellation.
+			default:
+				l, err := img.LayerByDigest(d.Digest())
+				if err != nil {
+					lm.opts.printf("invalid seg.Digest")
+					l = nil
 				}
+				jobs <- Job{Descriptor: *d, Layer: l}
 			}
 		}
 		return nil

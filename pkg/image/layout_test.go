@@ -197,7 +197,7 @@ func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 	assert.Equal(t, int64(0), lm.stats.BytesWrittenCount)
 	assert.Equal(t, int64(1000), lm.stats.BytesReadCount)
 	assert.Equal(t, int64(1000), lm.stats.BytesClonedCount)
-	assert.Equal(t, int64(100), lm.stats.MatchingSegmentsCount)
+	assert.Equal(t, int64(100), lm.stats.MatchedSegmentsCount)
 
 	// TODO: Check that hashes of all files are the same
 }
@@ -260,5 +260,5 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 	assert.Equal(t, int64(20), lm.stats.BytesWrittenCount)
 	assert.Equal(t, int64(1020), lm.stats.BytesReadCount)
 	assert.Equal(t, int64(1020), lm.stats.BytesClonedCount)
-	assert.Equal(t, int64(100), lm.stats.MatchingSegmentsCount)
+	assert.Equal(t, int64(100), lm.stats.MatchedSegmentsCount)
 }

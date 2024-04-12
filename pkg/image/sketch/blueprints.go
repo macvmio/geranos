@@ -1,4 +1,4 @@
-package image
+package sketch
 
 import (
 	"errors"
@@ -7,19 +7,19 @@ import (
 	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
 )
 
-type fileRecipe struct {
+type fileBlueprint struct {
 	Filename string
 	Segments []*filesegment.Descriptor
 }
 
-func (fr *fileRecipe) Size() int64 {
+func (fr *fileBlueprint) Size() int64 {
 	if len(fr.Segments) == 0 {
 		return 0
 	}
 	return fr.Segments[len(fr.Segments)-1].Stop() + 1
 }
 
-func (fr *fileRecipe) Validate() error {
+func (fr *fileBlueprint) Validate() error {
 	if len(fr.Segments) == 0 {
 		return errors.New("0 segments")
 	}
@@ -40,33 +40,28 @@ func (fr *fileRecipe) Validate() error {
 	return nil
 }
 
-func createFileRecipesFromImage(img v1.Image) ([]*fileRecipe, error) {
-	manifest, err := img.Manifest()
-	if err != nil {
-		return nil, err
-	}
-
-	fileRecipesMap := make(map[string]*fileRecipe)
+func createBlueprintsFromManifest(manifest v1.Manifest) ([]*fileBlueprint, error) {
+	fileBlueprintsMap := make(map[string]*fileBlueprint)
 	for _, l := range manifest.Layers {
 		segmentDescriptor, err := filesegment.ParseDescriptor(l)
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse descriptor: %w", err)
 		}
-		fr, present := fileRecipesMap[segmentDescriptor.Filename()]
+		fr, present := fileBlueprintsMap[segmentDescriptor.Filename()]
 		if !present {
-			fr = &fileRecipe{
+			fr = &fileBlueprint{
 				Filename: segmentDescriptor.Filename(),
 				Segments: make([]*filesegment.Descriptor, 0),
 			}
 		}
 		fr.Segments = append(fr.Segments, segmentDescriptor)
-		fileRecipesMap[segmentDescriptor.Filename()] = fr
+		fileBlueprintsMap[segmentDescriptor.Filename()] = fr
 	}
-	res := make([]*fileRecipe, 0)
-	for _, v := range fileRecipesMap {
-		err = v.Validate()
+	res := make([]*fileBlueprint, 0)
+	for _, v := range fileBlueprintsMap {
+		err := v.Validate()
 		if err != nil {
-			return nil, fmt.Errorf("file recipe for '%s' failed with: %w", v.Filename, err)
+			return nil, fmt.Errorf("file blueprint for '%s' failed with: %w", v.Filename, err)
 		}
 		res = append(res, v)
 	}

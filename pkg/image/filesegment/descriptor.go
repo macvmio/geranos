@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 	"strconv"
 	"strings"
 )
@@ -36,6 +37,17 @@ func (d *Descriptor) Digest() v1.Hash {
 
 func (d *Descriptor) Length() int64 {
 	return d.stop - d.start + 1
+}
+
+func (d *Descriptor) Annotations() map[string]string {
+	return map[string]string{
+		FilenameAnnotationKey: d.filename,
+		RangeAnnotationKey:    fmt.Sprintf("%d-%d", d.start, d.stop),
+	}
+}
+
+func (d *Descriptor) MediaType() types.MediaType {
+	return MediaType
 }
 
 // parseIntPair parses a string formatted as "<int>-<int>" and returns the two int64 numbers or an error.

@@ -1,4 +1,4 @@
-package image
+package sketch
 
 import (
 	"fmt"
@@ -9,22 +9,17 @@ import (
 	"path/filepath"
 )
 
-type SketchConstructor interface {
-	Construct(dir string, fileRecipes []*fileRecipe) (Statistics, error)
+func NewSketcher(rootDir string, manifestFilename string) *Sketcher {
+	return &Sketcher{rootDirectory: rootDir, manifestFileName: manifestFilename}
 }
 
-func NewSketchConstructor(rootDir string) SketchConstructor {
-	return &defaultSketchConstructor{rootDirectory: rootDir}
-}
-
-type defaultSketchConstructor struct {
-	rootDirectory string
-
-	stats Statistics
+type Sketcher struct {
+	rootDirectory    string
+	manifestFileName string
 }
 
 type cloneCandidate struct {
-	descriptors []*v1.Descriptor
+	descriptors []v1.Descriptor
 	dirPath     string
 }
 
@@ -45,24 +40,30 @@ func resizeFile(filePath string, newSize int64) error {
 	return nil
 }
 
-func (sc *defaultSketchConstructor) Construct(dir string, fileRecipes []*fileRecipe) (Statistics, error) {
+func (sc *Sketcher) Sketch(dir string, manifest v1.Manifest) (bytesClonedCount int64, matchedSegmentsCount int64, err error) {
+
+	fileBlueprints, err := createBlueprintsFromManifest(manifest)
+	if err != nil {
+		return 0, 0, err
+	}
+
 	cloneCandidates, err := sc.findCloneCandidates()
 	if err != nil {
-		return Statistics{}, fmt.Errorf("encountered error while looking for manifests: %w", err)
+		return 0, 0, fmt.Errorf("encountered error while looking for manifests: %w", err)
 	}
 	err = os.MkdirAll(dir, 0o755)
 	if err != nil {
-		return Statistics{}, fmt.Errorf("unable to create directory '%v': %w", dir, err)
+		return 0, 0, fmt.Errorf("unable to create directory '%v': %w", dir, err)
 	}
 
-	for _, fr := range fileRecipes {
+	for _, fr := range fileBlueprints {
 		// we will process each FR exactly once
 		// fr can easily have 1000 layers,
 		// each manifest can also have more than 1000 layers
 		// we need to compute best score in expected linear time
-		segmentsDigestMap := make(map[string]*filesegment.Descriptor)
+		segmentsDigestMap := make(map[string]filesegment.Descriptor)
 		for _, seg := range fr.Segments {
-			segmentsDigestMap[seg.Digest().String()] = seg
+			segmentsDigestMap[seg.Digest().String()] = *seg
 		}
 		bestScore := 0
 		var bestCloneCandidate *cloneCandidate
@@ -76,8 +77,8 @@ func (sc *defaultSketchConstructor) Construct(dir string, fileRecipes []*fileRec
 		if bestCloneCandidate == nil {
 			continue
 		}
-		sc.stats.BytesClonedCount += fr.Size()
-		sc.stats.MatchingSegmentsCount += int64(bestScore)
+		bytesClonedCount += fr.Size()
+		matchedSegmentsCount += int64(bestScore)
 		src := filepath.Join(bestCloneCandidate.dirPath, fr.Filename)
 		dest := filepath.Join(dir, fr.Filename)
 		if src == dest {
@@ -85,29 +86,29 @@ func (sc *defaultSketchConstructor) Construct(dir string, fileRecipes []*fileRec
 		}
 		err = duplicator.CloneFile(src, dest)
 		if err != nil {
-			return sc.stats, fmt.Errorf("unable to clone source file '%v' to destination '%v': %w", src, dest, err)
+			return bytesClonedCount, matchedSegmentsCount, fmt.Errorf("unable to clone source file '%v' to destination '%v': %w", src, dest, err)
 		}
 		err = resizeFile(dest, fr.Size())
 		if err != nil {
-			return sc.stats, fmt.Errorf("error occured while resizing file '%v' to its new size '%v': %w", dest, fr.Size(), err)
+			return bytesClonedCount, matchedSegmentsCount, fmt.Errorf("error occured while resizing file '%v' to its new size '%v': %w", dest, fr.Size(), err)
 		}
 	}
-	return sc.stats, nil
+	return bytesClonedCount, matchedSegmentsCount, nil
 }
 
 // parseManifestFile represents a placeholder for your actual parsing logic.
-func (sc *defaultSketchConstructor) findCloneCandidates() ([]*cloneCandidate, error) {
+func (sc *Sketcher) findCloneCandidates() ([]*cloneCandidate, error) {
 	type Job struct {
 		path string
 	}
-	jobs := make(chan Job, 2)
+	jobs := make(chan Job, 8)
 
 	go func() {
 		filepath.Walk(sc.rootDirectory, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return fmt.Errorf("error accessing path %q: %w\n", path, err)
 			}
-			if !info.IsDir() && info.Name() == LocalManifestFilename {
+			if !info.IsDir() && info.Name() == sc.manifestFileName {
 				jobs <- Job{path: path}
 			}
 			return nil
@@ -123,9 +124,9 @@ func (sc *defaultSketchConstructor) findCloneCandidates() ([]*cloneCandidate, er
 		}
 		manifest, err := v1.ParseManifest(f)
 		if err == nil {
-			descriptors := make([]*v1.Descriptor, 0)
+			descriptors := make([]v1.Descriptor, 0)
 			for _, d := range manifest.Layers {
-				descriptors = append(descriptors, &d)
+				descriptors = append(descriptors, d)
 			}
 			candidates = append(candidates, &cloneCandidate{
 				descriptors: descriptors,
@@ -140,7 +141,7 @@ func (sc *defaultSketchConstructor) findCloneCandidates() ([]*cloneCandidate, er
 	return candidates, nil
 }
 
-func (sc *defaultSketchConstructor) computeScore(segmentDigestMap map[string]*filesegment.Descriptor, m *cloneCandidate) int {
+func (sc *Sketcher) computeScore(segmentDigestMap map[string]filesegment.Descriptor, m *cloneCandidate) int {
 	score := 0
 	for _, descriptor := range m.descriptors {
 		_, ok := segmentDigestMap[descriptor.Digest.String()]

@@ -1,4 +1,4 @@
-package image
+package sketch
 
 import (
 	"fmt"
@@ -14,6 +14,7 @@ import (
 
 func TestDefaultSketchConstructor_ConstructConstruct(t *testing.T) {
 	const layersCount = 10
+	const testManifestName = ".oci.test.json"
 	prepare5CloneCandidatesWith10Layers := func(rootDir string) []*v1.Descriptor {
 		descriptors := make([]*v1.Descriptor, 0)
 		for i := 0; i < 5; i++ {
@@ -37,66 +38,62 @@ func TestDefaultSketchConstructor_ConstructConstruct(t *testing.T) {
 			for _, d := range manifest.Layers {
 				descriptors = append(descriptors, &d)
 			}
-			err = os.WriteFile(filepath.Join(localDir, LocalManifestFilename), manifestBytes, 0o777)
+			err = os.WriteFile(filepath.Join(localDir, testManifestName), manifestBytes, 0o777)
 		}
 		return descriptors
 	}
-	type Seg struct {
-		Start  int64
-		Stop   int64
-		Digest v1.Hash
-	}
-	makeFR := func(filename string, seg ...Seg) fileRecipe {
-		segs := make([]*filesegment.Descriptor, 0)
+
+	makeManifest := func(seg ...*filesegment.Descriptor) v1.Manifest {
+		m := v1.Manifest{Layers: make([]v1.Descriptor, 0)}
 		for _, s := range seg {
-			segs = append(segs, filesegment.NewDescriptor(filename, s.Start, s.Stop, s.Digest))
+			m.Layers = append(m.Layers, v1.Descriptor{
+				MediaType:   s.MediaType(),
+				Size:        0,
+				Digest:      s.Digest(),
+				Annotations: s.Annotations(),
+			})
 		}
-		return fileRecipe{
-			Filename: filename,
-			Segments: segs,
-		}
+		return m
 	}
 
 	tests := []struct {
 		name                   string
-		prepareFileRecipes     func(ds []*v1.Descriptor) []*fileRecipe
-		expectedStats          Statistics
+		prepareManifest        func(ds []*v1.Descriptor) v1.Manifest
+		bytesClonedCount       int64
+		matchedSegmentsCount   int64
 		prepareCloneCandidates func(rootDir string) []*v1.Descriptor
 		expectedErr            error
 	}{
 		{
 			name: "successful construct of single recipe",
-			prepareFileRecipes: func(ds []*v1.Descriptor) []*fileRecipe {
-				fr := makeFR("disk.img", Seg{0, 1, ds[0].Digest})
-				return []*fileRecipe{&fr}
+			prepareManifest: func(ds []*v1.Descriptor) v1.Manifest {
+				return makeManifest(filesegment.NewDescriptor("disk.img", 0, 1, ds[0].Digest))
 			},
-			expectedStats: Statistics{
-				BytesClonedCount:      2,
-				MatchingSegmentsCount: 1,
-			},
+			bytesClonedCount:       2,
+			matchedSegmentsCount:   1,
 			prepareCloneCandidates: prepare5CloneCandidatesWith10Layers,
 			expectedErr:            nil,
 		},
 		{
 			name: "successful construct of all file recipes",
-			prepareFileRecipes: func(ds []*v1.Descriptor) []*fileRecipe {
-				fr1 := makeFR("disk.img",
-					Seg{0, 2, ds[1].Digest},
-					Seg{3, 4, ds[2].Digest})
-				fr2 := makeFR("disk2.img", Seg{0, 10, ds[0].Digest})
-				return []*fileRecipe{&fr1, &fr2}
+			prepareManifest: func(ds []*v1.Descriptor) v1.Manifest {
+				return makeManifest(
+					filesegment.NewDescriptor("disk.img", 0, 2, ds[1].Digest),
+					filesegment.NewDescriptor("disk.img", 3, 4, ds[2].Digest),
+					filesegment.NewDescriptor("disk2.img", 0, 10, ds[0].Digest),
+				)
 			},
-			expectedStats: Statistics{
-				BytesClonedCount:      16,
-				MatchingSegmentsCount: 3,
-			},
+
+			bytesClonedCount:     16,
+			matchedSegmentsCount: 3,
+
 			prepareCloneCandidates: prepare5CloneCandidatesWith10Layers,
 			expectedErr:            nil,
 		},
 		{
 			name: "successful construct from best clone",
-			prepareFileRecipes: func(ds []*v1.Descriptor) []*fileRecipe {
-				fr1 := makeFR("disk.img",
+			prepareManifest: func(ds []*v1.Descriptor) v1.Manifest {
+				/*fr1 := makeFR("disk.img",
 					Seg{0, 1, ds[0].Digest},
 					Seg{2, 3, ds[1*layersCount+0].Digest},
 					Seg{4, 5, ds[2*layersCount+0].Digest},
@@ -104,13 +101,21 @@ func TestDefaultSketchConstructor_ConstructConstruct(t *testing.T) {
 					Seg{8, 9, ds[2*layersCount+2].Digest},
 					Seg{10, 11, ds[3*layersCount+0].Digest},
 					Seg{12, 13, ds[3*layersCount+1].Digest},
+				)*/
+				return makeManifest(
+					filesegment.NewDescriptor("disk.img", 0, 1, ds[0].Digest),
+					filesegment.NewDescriptor("disk.img", 2, 3, ds[1*layersCount+0].Digest),
+					filesegment.NewDescriptor("disk.img", 4, 5, ds[2*layersCount+0].Digest),
+					filesegment.NewDescriptor("disk.img", 6, 7, ds[2*layersCount+1].Digest),
+					filesegment.NewDescriptor("disk.img", 8, 9, ds[2*layersCount+2].Digest),
+					filesegment.NewDescriptor("disk.img", 10, 11, ds[3*layersCount+0].Digest),
+					filesegment.NewDescriptor("disk.img", 12, 13, ds[3*layersCount+1].Digest),
 				)
-				return []*fileRecipe{&fr1}
 			},
-			expectedStats: Statistics{
-				BytesClonedCount:      14,
-				MatchingSegmentsCount: 3,
-			},
+
+			bytesClonedCount:     14,
+			matchedSegmentsCount: 3,
+
 			prepareCloneCandidates: prepare5CloneCandidatesWith10Layers,
 			expectedErr:            nil,
 		},
@@ -123,27 +128,27 @@ func TestDefaultSketchConstructor_ConstructConstruct(t *testing.T) {
 			assert.NoError(t, err)
 			defer os.RemoveAll(rootDir) // Cleanup after the test
 
-			sc := defaultSketchConstructor{
-				rootDirectory: rootDir,
-				stats:         Statistics{},
-			}
+			sc := NewSketcher(rootDir, testManifestName)
 
 			// Call the prepare function to set up clone candidates
 			descriptors := tt.prepareCloneCandidates(sc.rootDirectory)
+			manifest := tt.prepareManifest(descriptors)
 
-			stats, err := sc.Construct(filepath.Join(rootDir, "some/dir"), tt.prepareFileRecipes(descriptors))
+			bytesClonedCount, matchedSegmentsCount, err := sc.Sketch(filepath.Join(rootDir, "some/dir"), manifest)
 
 			if tt.expectedErr != nil {
 				assert.EqualError(t, err, tt.expectedErr.Error())
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedStats, stats)
+				assert.Equal(t, tt.bytesClonedCount, bytesClonedCount)
+				assert.Equal(t, tt.matchedSegmentsCount, matchedSegmentsCount)
 			}
 		})
 	}
 }
 
 func TestSketchConstructor_FindCloneCandidates(t *testing.T) {
+	const localManifestFile = ".oci.test.json"
 	tests := []struct {
 		name           string
 		setup          func(rootDir string) // Function to setup the test's file system state
@@ -157,7 +162,7 @@ func TestSketchConstructor_FindCloneCandidates(t *testing.T) {
 				dirPath := filepath.Join(rootDir, "directory1")
 				err := os.MkdirAll(dirPath, 0755)
 				require.NoError(t, err)
-				manifestPath := filepath.Join(dirPath, LocalManifestFilename)
+				manifestPath := filepath.Join(dirPath, localManifestFile)
 				err = os.WriteFile(manifestPath, []byte("{}"), 0644) // Write an empty JSON object as a placeholder
 				require.NoError(t, err)
 			},
@@ -181,7 +186,7 @@ func TestSketchConstructor_FindCloneCandidates(t *testing.T) {
 					dirPath := filepath.Join(rootDir, fmt.Sprintf("directory%d", i))
 					err := os.MkdirAll(dirPath, 0755)
 					require.NoError(t, err)
-					err = os.WriteFile(filepath.Join(dirPath, LocalManifestFilename), []byte("{}"), 0644)
+					err = os.WriteFile(filepath.Join(dirPath, localManifestFile), []byte("{}"), 0644)
 					require.NoError(t, err)
 					err = os.WriteFile(filepath.Join(dirPath, "disk.img"), []byte(""), 0644)
 					require.NoError(t, err)
@@ -204,7 +209,7 @@ func TestSketchConstructor_FindCloneCandidates(t *testing.T) {
 			tt.setup(rootDir)
 
 			// Call the method under test
-			sc := defaultSketchConstructor{rootDirectory: rootDir}
+			sc := NewSketcher(rootDir, localManifestFile)
 			candidates, err := sc.findCloneCandidates()
 
 			if tt.expectedErr {
@@ -220,43 +225,43 @@ func TestSketchConstructor_FindCloneCandidates(t *testing.T) {
 // TestComputeScore tests the computeScore method of defaultSketchConstructor for various scenarios.
 func TestSketchConstructor_ComputeScore(t *testing.T) {
 	// Define test cases
-	newDescriptor := func(hash string) *filesegment.Descriptor {
-		return filesegment.NewDescriptor("test", 0, 0, v1.Hash{Algorithm: "sha256", Hex: hash})
+	newDescriptor := func(hash string) filesegment.Descriptor {
+		return *filesegment.NewDescriptor("test", 0, 0, v1.Hash{Algorithm: "sha256", Hex: hash})
 	}
 	tests := []struct {
 		name               string
-		segmentDescriptors map[string]*filesegment.Descriptor
-		descriptors        []*v1.Descriptor
+		segmentDescriptors map[string]filesegment.Descriptor
+		descriptors        []v1.Descriptor
 		expectedScore      int
 	}{
 		{
 			name: "No match - different hash",
-			segmentDescriptors: map[string]*filesegment.Descriptor{
+			segmentDescriptors: map[string]filesegment.Descriptor{
 				"hash1": newDescriptor("hash1"),
 			},
-			descriptors: []*v1.Descriptor{
+			descriptors: []v1.Descriptor{
 				{Digest: v1.Hash{Hex: "hash2"}},
 			},
 			expectedScore: 0,
 		},
 		{
 			name: "Single match",
-			segmentDescriptors: map[string]*filesegment.Descriptor{
+			segmentDescriptors: map[string]filesegment.Descriptor{
 				"sha256:hash1": newDescriptor("hash1"),
 			},
-			descriptors: []*v1.Descriptor{
+			descriptors: []v1.Descriptor{
 				{Digest: v1.Hash{Algorithm: "sha256", Hex: "hash1"}},
 			},
 			expectedScore: 1,
 		},
 		{
 			name: "Multiple matches",
-			segmentDescriptors: map[string]*filesegment.Descriptor{
+			segmentDescriptors: map[string]filesegment.Descriptor{
 				"sha256:hash1": newDescriptor("hash1"),
 				"sha256:hash2": newDescriptor("hash2"),
 				"sha256:hash3": newDescriptor("hash3"),
 			},
-			descriptors: []*v1.Descriptor{
+			descriptors: []v1.Descriptor{
 				{Digest: v1.Hash{Algorithm: "sha256", Hex: "hash2"}},
 				{Digest: v1.Hash{Algorithm: "sha256", Hex: "hash1"}},
 				{Digest: v1.Hash{Algorithm: "sha256", Hex: "hash3"}},
@@ -265,7 +270,7 @@ func TestSketchConstructor_ComputeScore(t *testing.T) {
 		},
 		{
 			name: "Multiple matches - interleaving",
-			segmentDescriptors: map[string]*filesegment.Descriptor{
+			segmentDescriptors: map[string]filesegment.Descriptor{
 				"sha256:hash0": newDescriptor("hash0"),
 				"sha256:hash1": newDescriptor("hash1"),
 				"sha256:hash2": newDescriptor("hash2"),
@@ -273,7 +278,7 @@ func TestSketchConstructor_ComputeScore(t *testing.T) {
 				"sha256:hash4": newDescriptor("hash4"),
 				"sha256:hash5": newDescriptor("hash5"),
 			},
-			descriptors: []*v1.Descriptor{
+			descriptors: []v1.Descriptor{
 				{Digest: v1.Hash{Algorithm: "sha256", Hex: "hash5"}},
 				{Digest: v1.Hash{Algorithm: "sha256", Hex: "hash3"}},
 				{Digest: v1.Hash{Algorithm: "sha256", Hex: "hash1"}},
@@ -283,11 +288,11 @@ func TestSketchConstructor_ComputeScore(t *testing.T) {
 		},
 		{
 			name: "Mismatch and match",
-			segmentDescriptors: map[string]*filesegment.Descriptor{
+			segmentDescriptors: map[string]filesegment.Descriptor{
 				"sha256:hash1": newDescriptor("hash1"),
 				"sha256:hash4": newDescriptor("hash4"),
 			},
-			descriptors: []*v1.Descriptor{
+			descriptors: []v1.Descriptor{
 				{Digest: v1.Hash{Algorithm: "sha256", Hex: "hash1"}},
 				{Digest: v1.Hash{Algorithm: "sha256", Hex: "hash2"}},
 				{Digest: v1.Hash{Algorithm: "sha256", Hex: "hash3"}},
@@ -299,7 +304,7 @@ func TestSketchConstructor_ComputeScore(t *testing.T) {
 	// Run test cases
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sc := defaultSketchConstructor{}
+			sc := Sketcher{}
 			cc := cloneCandidate{
 				descriptors: tt.descriptors,
 			}
