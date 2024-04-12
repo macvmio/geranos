@@ -3,18 +3,19 @@ module github.com/tomekjarosik/geranos
 go 1.22
 
 require (
+	github.com/docker/cli v26.0.0+incompatible
 	github.com/google/go-containerregistry v0.19.1
 	github.com/klauspost/compress v1.17.7
 	github.com/magiconair/properties v1.8.7
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.9.0
+	golang.org/x/sync v0.5.0
 )
 
 require (
 	github.com/containerd/stargz-snapshotter/estargz v0.14.3 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/docker/cli v26.0.0+incompatible // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/docker/docker v24.0.0+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.7.0 // indirect
@@ -41,7 +42,6 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
-	golang.org/x/sync v0.5.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect

@@ -121,6 +121,10 @@ func (pfl *Layer) Annotations() map[string]string {
 	}
 }
 
+func (pfl *Layer) Length() int64 {
+	return pfl.stop - pfl.start + 1
+}
+
 func NewLayer(filePath string, opts ...LayerOpt) (*Layer, error) {
 	start := int64(0)
 	info, err := os.Stat(filePath)

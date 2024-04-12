@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/empty"
-	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/types"
+	"github.com/tomekjarosik/geranos/pkg/image/dirimage"
 	"github.com/tomekjarosik/geranos/pkg/image/duplicator"
 	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
 	"github.com/tomekjarosik/geranos/pkg/image/sketch"
@@ -19,11 +18,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
-	"sync/atomic"
 	"syscall"
-	"time"
 )
 
 const LocalManifestFilename = ".oci.manifest.json"
@@ -84,14 +80,13 @@ func (lm *LayoutMapper) contentMatches(destinationDir string, segment *filesegme
 	return false
 }
 
-func (lm *LayoutMapper) writeLayer(destinationDir string, segment *filesegment.Descriptor, layer v1.Layer) (written int64, skipped int64, err error) {
-	if layer == nil {
-		return 0, 0, errors.New("nil layer provided")
-	}
-	f, err := os.OpenFile(filepath.Join(destinationDir, segment.Filename()), os.O_RDWR|os.O_CREATE, 0666)
+func (lm *LayoutMapper) writeToSegment(destinationDir string, segment *filesegment.Descriptor, src io.ReadCloser) (written int64, skipped int64, err error) {
+	// Here: we have io.ReadCloser dumping to a file at given location
+	f, err := filesegment.NewWriter(destinationDir, segment)
 	if err != nil {
 		return 0, 0, err
 	}
+
 	defer func(f *os.File) {
 		err := f.Close()
 		if err != nil {
@@ -99,17 +94,24 @@ func (lm *LayoutMapper) writeLayer(destinationDir string, segment *filesegment.D
 		}
 	}(f)
 
-	_, err = f.Seek(segment.Start(), io.SeekStart)
-	if err != nil {
-		return 0, 0, err
+	written, skipped, err = sparsefile.Copy(f, src)
+	if written+skipped != segment.Length() {
+		return written, skipped, fmt.Errorf("invalid numer of bytes written+skipped: segment length: %d, written+skipped: %d", segment.Length(), written+skipped)
 	}
+	return written, skipped, err
+}
+
+func (lm *LayoutMapper) writeLayer(destinationDir string, segment *filesegment.Descriptor, layer v1.Layer) (written int64, skipped int64, err error) {
+	if layer == nil {
+		return 0, 0, errors.New("nil layer provided")
+	}
+
 	rc, err := layer.Uncompressed()
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to access uncompressed layer: %w", err)
 	}
 	defer rc.Close()
-
-	return sparsefile.Copy(f, rc)
+	return lm.writeToSegment(destinationDir, segment, rc)
 }
 
 func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Reference) error {
@@ -162,9 +164,6 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 					if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
 						continue
 					}
-					if err == nil && written+skipped != job.Descriptor.Length() {
-						err = fmt.Errorf("invalid number of bytes written+skipped, got: %d, expected %d", written+skipped, job.Descriptor.Length())
-					}
 					jobErr = err
 					break
 				}
@@ -215,142 +214,14 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 	return os.WriteFile(filepath.Join(destinationDir, LocalManifestFilename), rawManifest, 0o777)
 }
 
-func (lm *LayoutMapper) splitToLayers(ctx context.Context, fullpath string, chunkSize int64, workersCount int) ([]*filesegment.Layer, error) {
-	f, err := os.Stat(fullpath)
-	if err != nil {
-		return nil, fmt.Errorf("faild to stat file '%v': %w", fullpath, err)
-	}
-	if f.Size() < chunkSize {
-		l, err := filesegment.NewLayer(fullpath)
-		if err != nil {
-			return nil, err
-		}
-		return []*filesegment.Layer{l}, nil
-	}
-
-	type layerResult struct {
-		layer *filesegment.Layer
-		err   error
-	}
-
-	maxIdx := f.Size() - 1
-	jobs := make(chan int64, workersCount)
-	results := make(chan layerResult, workersCount)
-
-	g, ctx := errgroup.WithContext(ctx)
-	for w := 0; w < workersCount; w++ {
-		g.Go(func() error {
-			for start := range jobs {
-				stop := start + chunkSize - 1
-				if stop > maxIdx {
-					stop = maxIdx
-				}
-				l, err := filesegment.NewLayer(fullpath, filesegment.WithRange(start, stop))
-				results <- layerResult{
-					layer: l,
-					err:   err,
-				}
-				if err == nil {
-					// Precompute hashes concurrently
-					_, _ = l.DiffID()
-					_, _ = l.Digest()
-					atomic.AddInt64(&lm.stats.BytesReadCount, 2*(stop-start+1))
-				}
-			}
-			return nil
-		})
-	}
-	g.Go(func() error {
-		defer close(jobs)
-		for start := int64(0); start <= maxIdx; start += chunkSize {
-			select {
-			case jobs <- start: // this blocks here waiting for a worker to pick up a job
-			case <-ctx.Done():
-				return ctx.Err() // Exit if the context is canceled
-			}
-		}
-		return nil
-	})
-
-	go func() {
-		g.Wait()
-		close(results)
-	}()
-
-	sortedLayers := make([]layerResult, 0)
-	for r := range results {
-		if r.err != nil {
-			return nil, r.err
-		}
-		sortedLayers = append(sortedLayers, r)
-	}
-	sort.Slice(sortedLayers, func(i, j int) bool {
-		return sortedLayers[i].layer.Start() < sortedLayers[j].layer.Start()
-	})
-	res := make([]*filesegment.Layer, 0)
-	for _, r := range sortedLayers {
-		res = append(res, r.layer)
-	}
-	return res, nil
-}
-
 func (lm *LayoutMapper) Read(ctx context.Context, ref name.Reference) (v1.Image, error) {
-	img := empty.Image
-	img = mutate.ConfigMediaType(img, ConfigMediaType)
-	resolveDir := filepath.Join(lm.rootDir, ref.String())
-	dirEntries, err := os.ReadDir(resolveDir)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read directory: '%v': %w", resolveDir, err)
-	}
-	for _, entry := range dirEntries {
-		if entry.IsDir() {
-			lm.opts.printf("unexpected subdirectory '%v', skipping", entry.Name())
-			continue
-		}
-		if strings.HasPrefix(entry.Name(), ".") {
-			lm.opts.printf("skipping file '%v' because it starts with a dot", entry.Name())
-			continue
-		}
-		layers, err := lm.splitToLayers(ctx, filepath.Join(resolveDir, entry.Name()), lm.opts.chunkSize, lm.opts.workersCount)
-		if err != nil {
-			return nil, fmt.Errorf("splitting to layers failed: %w", err)
-		}
-		addendums := make([]mutate.Addendum, 0)
-		for _, l := range layers {
-			addendums = append(addendums, mutate.Addendum{
-				Layer:       l,
-				History:     v1.History{},
-				Annotations: l.Annotations(),
-				MediaType:   l.GetMediaType(),
-			})
-		}
-		img, err = mutate.Append(img, addendums...)
-		if err != nil {
-			return nil, fmt.Errorf("unable to append layers to image: %w", err)
-		}
-	}
-	diffIDs := make([]v1.Hash, 0)
-	layers, err := img.Layers()
-	if err != nil {
-		return nil, err
-	}
-	for _, l := range layers {
-		h, err := l.DiffID()
-		if err != nil {
-			return nil, err
-		}
-		diffIDs = append(diffIDs, h)
-	}
 
-	return mutate.ConfigFile(img, &v1.ConfigFile{
-		Architecture: "arm64", // TODO:
-		Container:    "geranos",
-		Created:      v1.Time{Time: time.Now()},
-		OS:           "",
-		RootFS:       v1.RootFS{Type: "layers", DiffIDs: diffIDs},
-		OSVersion:    "TODO",
-		Variant:      "",
-	})
+	img, err := dirimage.Read(ctx, filepath.Join(lm.rootDir, ref.String()), dirimage.WithChunkSize(lm.opts.chunkSize))
+	if err != nil {
+		return nil, fmt.Errorf("unable to read dirimage: %w", err)
+	}
+	lm.stats.Add(&Statistics{BytesReadCount: img.BytesReadCount})
+	return img, err
 }
 
 // IsDirWithOnlyFiles checks if the given path is a directory that contains only files (no subdirectories).
