@@ -12,17 +12,13 @@ import (
 	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
 	"github.com/tomekjarosik/geranos/pkg/image/sketch"
 	"github.com/tomekjarosik/geranos/pkg/image/sparsefile"
-	"golang.org/x/sync/errgroup"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"syscall"
 )
 
-const LocalManifestFilename = ".oci.manifest.json"
 const ConfigMediaType = types.MediaType("application/online.jarosik.tomasz.v1.config+json")
 
 type LayoutMapper struct {
@@ -42,7 +38,7 @@ type Layout struct {
 func NewLayoutMapper(rootDir string, opt ...Option) *LayoutMapper {
 	return &LayoutMapper{
 		rootDir:  rootDir,
-		sketcher: sketch.NewSketcher(rootDir, LocalManifestFilename),
+		sketcher: sketch.NewSketcher(rootDir, dirimage.LocalManifestFilename),
 		opts:     makeOptions(opt...),
 	}
 }
@@ -133,85 +129,20 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 	}
 	lm.stats.Add(&Statistics{BytesClonedCount: bytesClonedCount, MatchedSegmentsCount: matchedSegmentsCount})
 
-	type Job struct {
-		Descriptor filesegment.Descriptor
-		Layer      v1.Layer
-	}
-	type JobResult struct {
-		Job Job
-		err error
-	}
-	workersCount := min(lm.opts.workersCount, runtime.NumCPU())
-	jobs := make(chan Job, workersCount)
-	results := make(chan JobResult, workersCount)
-
-	g, ctx := errgroup.WithContext(ctx)
-
-	for w := 0; w < workersCount; w++ {
-		g.Go(func() error {
-			for job := range jobs {
-				var jobErr error
-				for i := 0; i < lm.opts.networkFailureRetryCount; i++ {
-					if lm.contentMatches(destinationDir, &job.Descriptor) {
-						break
-					}
-					written, skipped, err := lm.writeLayer(destinationDir, &job.Descriptor, job.Layer)
-					lm.opts.printf("written=%d, skipped=%d\n", written, skipped)
-					lm.stats.Add(&Statistics{
-						BytesWrittenCount: written,
-						BytesSkippedCount: skipped,
-					})
-					if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
-						continue
-					}
-					jobErr = err
-					break
-				}
-				results <- JobResult{Job: job, err: jobErr}
-			}
-			return nil
-		})
-	}
-
-	g.Go(func() error {
-		defer close(jobs)
-		for _, l := range manifest.Layers {
-			d, err := filesegment.ParseDescriptor(l)
-			if err != nil {
-				return err
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err() // Early return on context cancellation.
-			default:
-				l, err := img.LayerByDigest(d.Digest())
-				if err != nil {
-					lm.opts.printf("invalid seg.Digest")
-					l = nil
-				}
-				jobs <- Job{Descriptor: *d, Layer: l}
-			}
-		}
-		return nil
-	})
-	go func() {
-		err = g.Wait()
-		if err != nil {
-			fmt.Println(err)
-		}
-		close(results)
-	}()
-
-	for res := range results {
-		if res.err != nil {
-			return fmt.Errorf("failed writing to file '%v' at offset '%v': %w", res.Job.Descriptor.Filename(), res.Job.Descriptor.Start(), res.err)
-		}
-	}
-	rawManifest, err := img.RawManifest()
+	convertedImage, err := dirimage.Convert(img)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to convert to dirimage: %w", err)
 	}
-	return os.WriteFile(filepath.Join(destinationDir, LocalManifestFilename), rawManifest, 0o777)
+	err = convertedImage.Write(ctx, destinationDir)
+	if err != nil {
+		return fmt.Errorf("unable to write dirimage to '%v': %w", destinationDir, err)
+	}
+	lm.stats.Add(&Statistics{
+		BytesWrittenCount: convertedImage.BytesWrittenCount,
+		BytesSkippedCount: convertedImage.BytesSkippedCount,
+		BytesReadCount:    convertedImage.BytesReadCount,
+	})
+	return nil
 }
 
 func (lm *LayoutMapper) Read(ctx context.Context, ref name.Reference) (v1.Image, error) {

@@ -15,15 +15,6 @@ import (
 	"time"
 )
 
-type DirImage struct {
-	v1.Image
-	BytesReadCount int64
-
-	segments []*filesegment.Layer
-}
-
-var _ v1.Image = (*DirImage)(nil)
-
 func precompute(ctx context.Context, layers []*filesegment.Layer, workersCount int) (bytesReadCount int64, err error) {
 	jobs := make(chan *filesegment.Layer, workersCount)
 	g, ctx := errgroup.WithContext(ctx)
@@ -31,9 +22,9 @@ func precompute(ctx context.Context, layers []*filesegment.Layer, workersCount i
 	for w := 0; w < workersCount; w++ {
 		g.Go(func() error {
 			for l := range jobs {
-				_, _ = l.DiffID()
+				// _, _ = l.DiffID() // NOTE: calculating DiffID() seems  unnecessary
 				_, _ = l.Digest()
-				atomic.AddInt64(&bytesReadCount, 2*l.Length())
+				atomic.AddInt64(&bytesReadCount, l.Length())
 			}
 			return nil
 		})
@@ -79,7 +70,7 @@ func Read(ctx context.Context, dir string, opt ...Option) (*DirImage, error) {
 		layers = append(layers, fileLayers...)
 	}
 
-	bytesReadCount, err := precompute(ctx, layers, opts.workersCount) // TODO:
+	bytesReadCount, err := precompute(ctx, layers, opts.workersCount)
 	if err != nil {
 		return nil, fmt.Errorf("error occurrent while precomputing hashes: %w", err)
 	}
@@ -102,13 +93,14 @@ func Read(ctx context.Context, dir string, opt ...Option) (*DirImage, error) {
 		Container: "geranos",
 		RootFS: v1.RootFS{
 			Type:    "layers",
-			DiffIDs: nil, // TODO??
+			DiffIDs: nil, // NOTE: These do not seem to be necessary
 		},
 		Created: v1.Time{Time: time.Now()},
 	})
 	return &DirImage{
 		Image:          img,
 		BytesReadCount: bytesReadCount,
-		segments:       layers,
+		directory:      dir,
+		// TODO: Descriptors
 	}, nil
 }
