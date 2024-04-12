@@ -25,6 +25,7 @@ func optionsForTesting(t *testing.T) (tempDir string, opts []Option) {
 	}
 	opts = []Option{
 		WithImagesPath(filepath.Join(tempDir, "images")),
+		WithCachePath(filepath.Join(tempDir, "cache")),
 	}
 	return tempDir, opts
 }

@@ -22,9 +22,9 @@ func precompute(ctx context.Context, layers []*filesegment.Layer, workersCount i
 	for w := 0; w < workersCount; w++ {
 		g.Go(func() error {
 			for l := range jobs {
-				// _, _ = l.DiffID() // NOTE: calculating DiffID() seems  unnecessary
+				_, _ = l.DiffID()
 				_, _ = l.Digest()
-				atomic.AddInt64(&bytesReadCount, l.Length())
+				atomic.AddInt64(&bytesReadCount, 2*l.Length())
 			}
 			return nil
 		})
@@ -75,6 +75,7 @@ func Read(ctx context.Context, dir string, opt ...Option) (*DirImage, error) {
 		return nil, fmt.Errorf("error occurrent while precomputing hashes: %w", err)
 	}
 	addendums := make([]mutate.Addendum, 0)
+	diffIDs := make([]v1.Hash, 0)
 	for _, l := range layers {
 		addendums = append(addendums, mutate.Addendum{
 			Layer:       l,
@@ -82,6 +83,11 @@ func Read(ctx context.Context, dir string, opt ...Option) (*DirImage, error) {
 			Annotations: l.Annotations(),
 			MediaType:   l.GetMediaType(),
 		})
+		diffID, err := l.DiffID()
+		if err != nil {
+			return nil, err
+		}
+		diffIDs = append(diffIDs, diffID)
 	}
 	img := empty.Image
 	img, err = mutate.Append(img, addendums...)
@@ -93,7 +99,7 @@ func Read(ctx context.Context, dir string, opt ...Option) (*DirImage, error) {
 		Container: "geranos",
 		RootFS: v1.RootFS{
 			Type:    "layers",
-			DiffIDs: nil, // NOTE: These do not seem to be necessary
+			DiffIDs: diffIDs,
 		},
 		Created: v1.Time{Time: time.Now()},
 	})

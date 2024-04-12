@@ -26,6 +26,12 @@ func WithImagesPath(imagesPath string) Option {
 	}
 }
 
+func WithCachePath(cachePath string) Option {
+	return func(o *options) {
+		o.cachePath = cachePath
+	}
+}
+
 func WithInsecureTransport() Option {
 	return func(o *options) {
 		o.insecure = false
