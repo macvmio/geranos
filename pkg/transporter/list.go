@@ -2,12 +2,12 @@ package transporter
 
 import (
 	"fmt"
-	"github.com/tomekjarosik/geranos/pkg/image"
+	"github.com/tomekjarosik/geranos/pkg/layout"
 )
 
 func List(opt ...Option) error {
 	opts := makeOptions(opt...)
-	lm := image.NewLayoutMapper(opts.imagesPath)
+	lm := layout.NewMapper(opts.imagesPath)
 	props, err := lm.List()
 	if err != nil {
 		return fmt.Errorf("unable to list images: %w", err)

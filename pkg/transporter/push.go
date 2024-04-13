@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/tomekjarosik/geranos/pkg/image"
+	"github.com/tomekjarosik/geranos/pkg/layout"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -17,14 +17,14 @@ func Push(imageRef string, opt ...Option) error {
 		return err
 	}
 
-	lm := image.NewLayoutMapper(opts.imagesPath)
+	lm := layout.NewMapper(opts.imagesPath)
 
 	img, err := lm.Read(opts.ctx, ref)
 	if err != nil {
 		return fmt.Errorf("unable to read image from disk: %w", err)
 	}
 	if opts.mountedReference != nil {
-		img = image.NewMountableImage(img, opts.mountedReference)
+		img = layout.NewMountableImage(img, opts.mountedReference)
 	}
 
 	layers, err := img.Layers()

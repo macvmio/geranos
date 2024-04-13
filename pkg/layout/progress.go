@@ -1,4 +1,4 @@
-package image
+package layout
 
 type ProgressUpdate struct {
 }

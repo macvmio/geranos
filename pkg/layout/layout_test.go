@@ -1,4 +1,4 @@
-package image
+package layout
 
 import (
 	"context"
@@ -10,8 +10,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/validate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tomekjarosik/geranos/pkg/image/duplicator"
-	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
+	"github.com/tomekjarosik/geranos/pkg/duplicator"
+	"github.com/tomekjarosik/geranos/pkg/filesegment"
 	"io"
 	"os"
 	"path"
@@ -29,7 +29,7 @@ func hashFromFile(t *testing.T, filename string) string {
 }
 
 func TestLayoutMapper_Read(t *testing.T) {
-	lm := NewLayoutMapper("testdata")
+	lm := NewMapper("testdata")
 	ref, err := name.ParseReference("vm1")
 	require.NoErrorf(t, err, "unable to parse reference: %v", err)
 	img, err := lm.Read(context.Background(), ref)
@@ -46,14 +46,14 @@ func TestLayoutMapper_Read_VariousChunkSizes(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	lmDst := NewLayoutMapper(tempDir)
+	lmDst := NewMapper(tempDir)
 	srcRef, err := name.ParseReference("vm1")
 	require.NoErrorf(t, err, "unable to parse source reference: %v", err)
 	dstRef, err := name.ParseReference("vmdst")
 	require.NoErrorf(t, err, "unable to parse destination reference: %v", err)
 
 	for chunkSize := int64(1); chunkSize < 10; chunkSize++ {
-		lmSrc := NewLayoutMapper("testdata", WithChunkSize(chunkSize))
+		lmSrc := NewMapper("testdata", WithChunkSize(chunkSize))
 		img, err := lmSrc.Read(context.Background(), srcRef)
 		require.NoErrorf(t, err, "unable to read image: %v", err)
 		err = validate.Image(img, validate.Fast)
@@ -133,7 +133,7 @@ func TestLayoutMapper_Write_MustOptimizeDiskSpace(t *testing.T) {
 	hashBefore := hashFromFile(t, randomFileName)
 	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1"))
 	require.NoErrorf(t, err, "unable to parse reference: %v", err)
-	lm := NewLayoutMapper(tempDir, WithChunkSize(chunkSize))
+	lm := NewMapper(tempDir, WithChunkSize(chunkSize))
 	img1, err := lm.Read(ctx, srcRef)
 	require.NoErrorf(t, err, "unable to read disk image: %v", err)
 	for i := 2; i < 12; i++ {
@@ -167,12 +167,13 @@ func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), 0o777)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 	const chunkSize = 10
-	lm := NewLayoutMapper(tempDir, WithChunkSize(chunkSize))
+	lm := NewMapper(tempDir, WithChunkSize(chunkSize))
 	err = generateRandomFile(path.Join(testRepoDir, "a:v1/disk.img"), 100*chunkSize)
 	require.NoErrorf(t, err, "unable to generate file: %v", err)
 
 	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1"))
 	require.NoErrorf(t, err, "unable to parse reference: %v", err)
+	beforeHash := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v1/disk.img"))
 	img1, err := lm.Read(ctx, srcRef)
 	require.NoErrorf(t, err, "unable to read disk image: %v", err)
 
@@ -199,7 +200,8 @@ func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 	assert.Equal(t, int64(1000), lm.stats.BytesClonedCount)
 	assert.Equal(t, int64(100), lm.stats.MatchedSegmentsCount)
 
-	// TODO: Check that hashes of all files are the same
+	afterHash := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v3/disk.img"))
+	assert.Equal(t, beforeHash, afterHash)
 }
 
 func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t *testing.T) {
@@ -211,7 +213,7 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), 0o777)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 	const chunkSize = 10
-	lm := NewLayoutMapper(tempDir, WithChunkSize(chunkSize))
+	lm := NewMapper(tempDir, WithChunkSize(chunkSize))
 	randomFilename := path.Join(testRepoDir, "a:v1/disk.img")
 	err = generateRandomFile(randomFilename, 100*chunkSize)
 	require.NoErrorf(t, err, "unable to generate file: %v", err)
@@ -236,8 +238,6 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 
 	// Here "testrepo/a:v2" contains .oci.manifest.json, and is the same as generated file
 
-	destRef3, err := name.ParseReference("oci.jarosik.online/testrepo/a:v3")
-	require.NoErrorf(t, err, "unable to parse reference %v: %v", destRef3, err)
 	err = appendRandomBytesToFile(randomFilename, 21)
 	require.NoError(t, err)
 	l1, err := filesegment.NewLayer(randomFilename, filesegment.WithRange(1000, 1009))
@@ -255,10 +255,46 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 	})
 	require.NoError(t, err)
 
-	err = lm.Write(ctx, img3, destRef3)
+	destRef, err = name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v3"))
+	require.NoErrorf(t, err, "unable to parse reference %v: %v", destRef, err)
+	err = lm.Write(ctx, img3, destRef)
 	require.NoErrorf(t, err, "unable to write image %v: %v", destRef, err)
 	assert.Equal(t, int64(20), lm.stats.BytesWrittenCount)
 	assert.Equal(t, int64(1020), lm.stats.BytesReadCount)
 	assert.Equal(t, int64(1020), lm.stats.BytesClonedCount)
 	assert.Equal(t, int64(100), lm.stats.MatchedSegmentsCount)
+}
+
+func TestLayoutMapper_Write_MultipleConcurrentWorkers(t *testing.T) {
+	ctx := context.Background()
+	tempDir, err := os.MkdirTemp("", "content-matches-*")
+	require.NoErrorf(t, err, "unable to create temp dir: %v", err)
+	defer os.RemoveAll(tempDir)
+	testRepoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
+	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), 0o777)
+	require.NoErrorf(t, err, "unable to create directory: %v", err)
+	logF := func(fmt string, argv ...any) {}
+	const chunkSize = 11
+	lm := NewMapper(tempDir, WithChunkSize(chunkSize), WithLogFunction(logF))
+	err = generateRandomFile(path.Join(testRepoDir, "a:v1/disk.img"), 200*chunkSize)
+	require.NoErrorf(t, err, "unable to generate file: %v", err)
+
+	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1"))
+	require.NoErrorf(t, err, "unable to parse reference: %v", err)
+	beforeHash := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v1/disk.img"))
+	img1, err := lm.Read(ctx, srcRef)
+	require.NoErrorf(t, err, "unable to read disk image: %v", err)
+
+	for workersCount := 1; workersCount < 10; workersCount++ {
+		t.Run(fmt.Sprintf("Write-with-%d-workers", workersCount), func(t *testing.T) {
+
+			lm2 := NewMapper(tempDir, WithChunkSize(chunkSize), WithWorkersCount(workersCount), WithLogFunction(logF))
+			dstRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v%d", workersCount))
+			require.NoError(t, err)
+			err = lm2.Write(ctx, img1, dstRef)
+			require.NoError(t, err)
+			afterHash := hashFromFile(t, path.Join(tempDir, dstRef.String(), "disk.img"))
+			assert.Equal(t, beforeHash, afterHash)
+		})
+	}
 }

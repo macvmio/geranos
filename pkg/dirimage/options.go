@@ -1,4 +1,4 @@
-package image
+package dirimage
 
 import (
 	"log"
@@ -29,14 +29,20 @@ func makeOptions(opts ...Option) *options {
 	return res
 }
 
-func WithWorkersCount(count int) Option {
-	return func(opts *options) {
-		opts.workersCount = count
+func WithChunkSize(chunkSize int64) Option {
+	return func(o *options) {
+		o.chunkSize = chunkSize
 	}
 }
 
-func WithChunkSize(chunkSize int64) Option {
-	return func(opts *options) {
-		opts.chunkSize = chunkSize
+func WithWorkersCount(workersCount int) Option {
+	return func(o *options) {
+		o.workersCount = workersCount
+	}
+}
+
+func WithLogFunction(log func(fmt string, args ...any)) Option {
+	return func(o *options) {
+		o.printf = log
 	}
 }

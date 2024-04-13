@@ -16,3 +16,9 @@ func WithRange(start, stop int64) LayerOpt {
 		l.stop = stop
 	}
 }
+
+func WithLogFunction(log func(fmt string, args ...any)) LayerOpt {
+	return func(l *Layer) {
+		l.log = log
+	}
+}

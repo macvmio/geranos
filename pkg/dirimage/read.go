@@ -6,7 +6,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
-	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
+	"github.com/tomekjarosik/geranos/pkg/filesegment"
 	"golang.org/x/sync/errgroup"
 	"os"
 	"path/filepath"
@@ -63,7 +63,7 @@ func Read(ctx context.Context, dir string, opt ...Option) (*DirImage, error) {
 			continue
 		}
 
-		fileLayers, err := filesegment.Split(filepath.Join(dir, entry.Name()), opts.chunkSize)
+		fileLayers, err := filesegment.Split(filepath.Join(dir, entry.Name()), opts.chunkSize, filesegment.WithLogFunction(opts.printf))
 		if err != nil {
 			return nil, err
 		}

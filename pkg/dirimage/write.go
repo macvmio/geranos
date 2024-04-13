@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
-	"github.com/tomekjarosik/geranos/pkg/image/sparsefile"
+	"github.com/tomekjarosik/geranos/pkg/filesegment"
+	"github.com/tomekjarosik/geranos/pkg/sparsefile"
 	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
@@ -20,7 +20,7 @@ const LocalManifestFilename = ".oci.manifest.json"
 
 func contentMatches(destinationDir string, segment *filesegment.Descriptor) bool {
 	fname := filepath.Join(destinationDir, segment.Filename())
-	f, err := os.OpenFile(fname, os.O_RDONLY, 0666)
+	/*f, err := os.OpenFile(fname, os.O_RDONLY, 0666)
 	if err != nil {
 		return false
 	}
@@ -29,7 +29,8 @@ func contentMatches(destinationDir string, segment *filesegment.Descriptor) bool
 		if err != nil {
 			// TODO: lm.opts.printf("error while closing file %v, got %v", segment.Filename(), err)
 		}
-	}(f)
+	}(f)*/
+	//  TODO:
 	l, err := filesegment.NewLayer(fname, filesegment.WithRange(segment.Start(), segment.Stop()))
 	if err != nil {
 		return false
@@ -79,6 +80,9 @@ func writeLayer(destinationDir string, segment *filesegment.Descriptor, layer v1
 }
 
 func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Option) error {
+	if di.Image == nil {
+		return errors.New("invalid image")
+	}
 	opts := makeOptions(opt...)
 
 	type Job struct {
@@ -92,18 +96,17 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 
 	workersCount := min(opts.workersCount, runtime.NumCPU())
 	jobs := make(chan Job, workersCount)
-	results := make(chan JobResult, workersCount)
-
 	g, ctx := errgroup.WithContext(ctx)
-
+	layerOpts := []filesegment.LayerOpt{filesegment.WithLogFunction(opts.printf)}
 	for w := 0; w < workersCount; w++ {
 		g.Go(func() error {
 			for job := range jobs {
 				atomic.AddInt64(&di.BytesReadCount, job.Descriptor.Length())
-				if contentMatches(destinationDir, &job.Descriptor) {
+
+				if filesegment.Matches(&job.Descriptor, destinationDir, layerOpts...) {
 					continue
 				}
-				var jobErr error
+
 				for i := 0; i < opts.networkFailureRetryCount; i++ {
 					written, skipped, err := writeLayer(destinationDir, &job.Descriptor, job.Layer)
 					opts.printf("written=%d, skipped=%d\n", written, skipped)
@@ -113,10 +116,12 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 					if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
 						continue
 					}
-					jobErr = err
-					break
+					if err == nil {
+						break
+					}
+
+					return fmt.Errorf("failed writing to file '%v' at offset '%v': %w", job.Descriptor.Filename(), job.Descriptor.Start(), err)
 				}
-				results <- JobResult{Job: job, err: jobErr}
 			}
 			return nil
 		})
@@ -139,19 +144,12 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 		}
 		return nil
 	})
-	go func() {
-		err := g.Wait()
-		if err != nil {
-			fmt.Println(err)
-		}
-		close(results)
-	}()
 
-	for res := range results {
-		if res.err != nil {
-			return fmt.Errorf("failed writing to file '%v' at offset '%v': %w", res.Job.Descriptor.Filename(), res.Job.Descriptor.Start(), res.err)
-		}
+	err := g.Wait()
+	if err != nil {
+		return err
 	}
+
 	rawManifest, err := di.Image.RawManifest()
 	if err != nil {
 		return err

@@ -1,4 +1,4 @@
-package image
+package layout
 
 import (
 	"context"
@@ -7,11 +7,13 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
-	"github.com/tomekjarosik/geranos/pkg/image/dirimage"
-	"github.com/tomekjarosik/geranos/pkg/image/duplicator"
-	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
-	"github.com/tomekjarosik/geranos/pkg/image/sketch"
-	"github.com/tomekjarosik/geranos/pkg/image/sparsefile"
+	"github.com/tomekjarosik/geranos/pkg/dirimage"
+	"github.com/tomekjarosik/geranos/pkg/filesegment"
+
+	"github.com/tomekjarosik/geranos/pkg/duplicator"
+
+	"github.com/tomekjarosik/geranos/pkg/sketch"
+	"github.com/tomekjarosik/geranos/pkg/sparsefile"
 	"io"
 	"io/fs"
 	"os"
@@ -21,7 +23,7 @@ import (
 
 const ConfigMediaType = types.MediaType("application/online.jarosik.tomasz.v1.config+json")
 
-type LayoutMapper struct {
+type Mapper struct {
 	rootDir  string
 	sketcher *sketch.Sketcher
 
@@ -35,49 +37,19 @@ type Layout struct {
 	Sizes     []int64
 }
 
-func NewLayoutMapper(rootDir string, opt ...Option) *LayoutMapper {
-	return &LayoutMapper{
+func NewMapper(rootDir string, opt ...Option) *Mapper {
+	return &Mapper{
 		rootDir:  rootDir,
 		sketcher: sketch.NewSketcher(rootDir, dirimage.LocalManifestFilename),
 		opts:     makeOptions(opt...),
 	}
 }
 
-func (lm *LayoutMapper) refToDir(ref name.Reference) string {
+func (lm *Mapper) refToDir(ref name.Reference) string {
 	return filepath.Join(lm.rootDir, ref.String())
 }
 
-func (lm *LayoutMapper) contentMatches(destinationDir string, segment *filesegment.Descriptor) bool {
-	fname := filepath.Join(destinationDir, segment.Filename())
-	f, err := os.OpenFile(fname, os.O_RDONLY, 0666)
-	if err != nil {
-		return false
-	}
-	defer func(f *os.File) {
-		err := f.Close()
-		if err != nil {
-			lm.opts.printf("error while closing file %v, got %v", segment.Filename(), err)
-		}
-	}(f)
-	l, err := filesegment.NewLayer(fname, filesegment.WithRange(segment.Start(), segment.Stop()))
-	if err != nil {
-		return false
-	}
-	d, err := l.Digest()
-	lm.stats.Add(&Statistics{
-		BytesReadCount: segment.Length(),
-	})
-	if err != nil {
-		return false
-	}
-	if d == segment.Digest() {
-		return true
-	}
-	return false
-}
-
-func (lm *LayoutMapper) writeToSegment(destinationDir string, segment *filesegment.Descriptor, src io.ReadCloser) (written int64, skipped int64, err error) {
-	// Here: we have io.ReadCloser dumping to a file at given location
+func (lm *Mapper) writeToSegment(destinationDir string, segment *filesegment.Descriptor, src io.ReadCloser) (written int64, skipped int64, err error) {
 	f, err := filesegment.NewWriter(destinationDir, segment)
 	if err != nil {
 		return 0, 0, err
@@ -97,7 +69,7 @@ func (lm *LayoutMapper) writeToSegment(destinationDir string, segment *filesegme
 	return written, skipped, err
 }
 
-func (lm *LayoutMapper) writeLayer(destinationDir string, segment *filesegment.Descriptor, layer v1.Layer) (written int64, skipped int64, err error) {
+func (lm *Mapper) writeLayer(destinationDir string, segment *filesegment.Descriptor, layer v1.Layer) (written int64, skipped int64, err error) {
 	if layer == nil {
 		return 0, 0, errors.New("nil layer provided")
 	}
@@ -110,7 +82,7 @@ func (lm *LayoutMapper) writeLayer(destinationDir string, segment *filesegment.D
 	return lm.writeToSegment(destinationDir, segment, rc)
 }
 
-func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Reference) error {
+func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) error {
 	destinationDir := lm.refToDir(ref)
 	err := os.MkdirAll(destinationDir, 0o777)
 	if err != nil {
@@ -133,7 +105,7 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 	if err != nil {
 		return fmt.Errorf("unable to convert to dirimage: %w", err)
 	}
-	err = convertedImage.Write(ctx, destinationDir)
+	err = convertedImage.Write(ctx, destinationDir, dirimage.WithWorkersCount(lm.opts.workersCount), dirimage.WithLogFunction(lm.opts.printf))
 	if err != nil {
 		return fmt.Errorf("unable to write dirimage to '%v': %w", destinationDir, err)
 	}
@@ -145,9 +117,9 @@ func (lm *LayoutMapper) Write(ctx context.Context, img v1.Image, ref name.Refere
 	return nil
 }
 
-func (lm *LayoutMapper) Read(ctx context.Context, ref name.Reference) (v1.Image, error) {
+func (lm *Mapper) Read(ctx context.Context, ref name.Reference) (v1.Image, error) {
 
-	img, err := dirimage.Read(ctx, filepath.Join(lm.rootDir, ref.String()), dirimage.WithChunkSize(lm.opts.chunkSize))
+	img, err := dirimage.Read(ctx, filepath.Join(lm.rootDir, ref.String()), dirimage.WithChunkSize(lm.opts.chunkSize), dirimage.WithLogFunction(lm.opts.printf))
 	if err != nil {
 		return nil, fmt.Errorf("unable to read dirimage: %w", err)
 	}
@@ -182,7 +154,7 @@ func IsDirWithOnlyFiles(path string) (bool, error) {
 	return true, nil // No subdirectories found, only files
 }
 
-func (lm *LayoutMapper) Adopt(src string, ref name.Reference, failIfContainsSubdirectories bool) error {
+func (lm *Mapper) Adopt(src string, ref name.Reference, failIfContainsSubdirectories bool) error {
 	isFlatDir, err := IsDirWithOnlyFiles(src)
 	if err != nil {
 		return fmt.Errorf("unable to verify if directory is flat: %w", err)
@@ -216,11 +188,11 @@ func directorySize(path string) (int64, error) {
 	return size, err
 }
 
-func (lm *LayoutMapper) ContainsManifest(ref name.Reference) bool {
+func (lm *Mapper) ContainsManifest(ref name.Reference) bool {
 	return true
 }
 
-func (lm *LayoutMapper) List() ([]Properties, error) {
+func (lm *Mapper) List() ([]Properties, error) {
 	res := make([]Properties, 0)
 	err := filepath.WalkDir(lm.rootDir, func(path string, d fs.DirEntry, err error) error {
 		if !d.IsDir() {
@@ -253,11 +225,11 @@ func (lm *LayoutMapper) List() ([]Properties, error) {
 	return res, err
 }
 
-func (lm *LayoutMapper) Clone(src name.Reference, dst name.Reference) error {
+func (lm *Mapper) Clone(src name.Reference, dst name.Reference) error {
 	return duplicator.CloneDirectory(lm.refToDir(src), lm.refToDir(dst), true)
 }
 
-func (lm *LayoutMapper) Remove(src name.Reference) error {
+func (lm *Mapper) Remove(src name.Reference) error {
 	ref, err := name.ParseReference(src.String(), name.StrictValidation)
 	if err != nil {
 		return fmt.Errorf("unable to valid reference: %w", err)
@@ -265,6 +237,6 @@ func (lm *LayoutMapper) Remove(src name.Reference) error {
 	return os.RemoveAll(filepath.Join(lm.rootDir, lm.refToDir(ref)))
 }
 
-func (lm *LayoutMapper) Stats() Statistics {
+func (lm *Mapper) Stats() Statistics {
 	return lm.stats
 }

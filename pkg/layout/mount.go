@@ -1,4 +1,4 @@
-package image
+package layout
 
 import (
 	"github.com/google/go-containerregistry/pkg/name"

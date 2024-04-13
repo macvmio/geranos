@@ -3,8 +3,8 @@ package sketch
 import (
 	"fmt"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/tomekjarosik/geranos/pkg/image/duplicator"
-	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
+	"github.com/tomekjarosik/geranos/pkg/duplicator"
+	"github.com/tomekjarosik/geranos/pkg/filesegment"
 	"os"
 	"path/filepath"
 )

@@ -2,7 +2,7 @@ package dirimage
 
 import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
+	"github.com/tomekjarosik/geranos/pkg/filesegment"
 )
 
 func Convert(img v1.Image) (*DirImage, error) {

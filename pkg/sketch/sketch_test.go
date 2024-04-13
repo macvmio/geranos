@@ -6,7 +6,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
+	"github.com/tomekjarosik/geranos/pkg/filesegment"
 	"os"
 	"path/filepath"
 	"testing"

@@ -2,7 +2,7 @@ package transporter
 
 import (
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/tomekjarosik/geranos/pkg/image"
+	"github.com/tomekjarosik/geranos/pkg/layout"
 )
 
 func Clone(src string, dst string, opt ...Option) error {
@@ -16,6 +16,6 @@ func Clone(src string, dst string, opt ...Option) error {
 		return err
 	}
 
-	lm := image.NewLayoutMapper(opts.imagesPath)
+	lm := layout.NewMapper(opts.imagesPath)
 	return lm.Clone(srcRef, dstRef)
 }

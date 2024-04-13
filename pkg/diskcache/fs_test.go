@@ -9,7 +9,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/stream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tomekjarosik/geranos/pkg/image/filesegment"
+	"github.com/tomekjarosik/geranos/pkg/filesegment"
 	"io"
 	"os"
 	"path/filepath"

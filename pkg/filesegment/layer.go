@@ -5,7 +5,7 @@ import (
 	"fmt"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
-	"github.com/tomekjarosik/geranos/pkg/image/zstd"
+	"github.com/tomekjarosik/geranos/pkg/zstd"
 	"io"
 	"log"
 	"os"
@@ -27,6 +27,8 @@ type Layer struct {
 	hashSizeError    error
 	compressedOnce   sync.Once
 	uncompressedOnce sync.Once
+
+	log func(fmt string, args ...any)
 }
 
 var _ v1.Layer = (*Layer)(nil)
@@ -42,7 +44,7 @@ func (pfl *Layer) DiffID() (v1.Hash, error) {
 		if err != nil {
 			return
 		}
-		log.Printf("%v: calculated uncompressed layer hash", pfl)
+		pfl.log("%v: calculated uncompressed layer hash", pfl)
 		pfl.diffID = cfgHash
 	})
 	return pfl.diffID, nil
@@ -85,7 +87,7 @@ func (pfl *Layer) calcSizeHash() {
 		}
 		defer r.Close()
 		pfl.hash, pfl.size, pfl.hashSizeError = v1.SHA256(r)
-		log.Printf("%v: calculated compressed layer hash", pfl)
+		pfl.log("%v: calculated compressed layer hash", pfl)
 	})
 }
 
@@ -126,17 +128,17 @@ func (pfl *Layer) Length() int64 {
 }
 
 func NewLayer(filePath string, opts ...LayerOpt) (*Layer, error) {
-	start := int64(0)
 	info, err := os.Stat(filePath)
 	if err != nil {
 		return nil, err
 	}
-	stop := info.Size() - 1
+
 	pfl := &Layer{
 		filePath:  filePath,
-		start:     start,
-		stop:      stop,
+		start:     0,
+		stop:      info.Size() - 1,
 		mediaType: MediaType,
+		log:       log.Printf,
 	}
 	for _, o := range opts {
 		o(pfl)
