@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync/atomic"
 	"syscall"
 )
@@ -84,6 +83,7 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 		return errors.New("invalid image")
 	}
 	opts := makeOptions(opt...)
+	opts.printf("options: %#v\n", opts)
 
 	type Job struct {
 		Descriptor filesegment.Descriptor
@@ -94,22 +94,22 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 		err error
 	}
 
-	workersCount := min(opts.workersCount, runtime.NumCPU())
-	jobs := make(chan Job, workersCount)
+	jobs := make(chan Job, opts.workersCount)
 	g, ctx := errgroup.WithContext(ctx)
 	layerOpts := []filesegment.LayerOpt{filesegment.WithLogFunction(opts.printf)}
-	for w := 0; w < workersCount; w++ {
+	for w := 0; w < opts.workersCount; w++ {
 		g.Go(func() error {
 			for job := range jobs {
 				atomic.AddInt64(&di.BytesReadCount, job.Descriptor.Length())
 
 				if filesegment.Matches(&job.Descriptor, destinationDir, layerOpts...) {
+					opts.printf("existing layer: %v\n", &job.Descriptor)
 					continue
 				}
 
 				for i := 0; i < opts.networkFailureRetryCount; i++ {
 					written, skipped, err := writeLayer(destinationDir, &job.Descriptor, job.Layer)
-					opts.printf("written=%d, skipped=%d\n", written, skipped)
+					opts.printf("downloaded layer: %v, written=%d, skipped=%d\n", &job.Descriptor, written, skipped)
 
 					atomic.AddInt64(&di.BytesWrittenCount, written)
 					atomic.AddInt64(&di.BytesSkippedCount, skipped)
@@ -119,8 +119,7 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 					if err == nil {
 						break
 					}
-
-					return fmt.Errorf("failed writing to file '%v' at offset '%v': %w", job.Descriptor.Filename(), job.Descriptor.Start(), err)
+					opts.printf("failed writing to file '%v' at offset '%v': %v\n", job.Descriptor.Filename(), job.Descriptor.Start(), err)
 				}
 			}
 			return nil
@@ -130,16 +129,14 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 	g.Go(func() error {
 		defer close(jobs)
 		for _, d := range di.segmentDescriptors {
+			l, err := di.Image.LayerByDigest(d.Digest())
+			if err != nil {
+				return err
+			}
 			select {
 			case <-ctx.Done():
 				return ctx.Err() // Early return on context cancellation.
-			default:
-				l, err := di.Image.LayerByDigest(d.Digest())
-				if err != nil {
-					opts.printf("invalid seg.Digest")
-					l = nil
-				}
-				jobs <- Job{Descriptor: *d, Layer: l}
+			case jobs <- Job{Descriptor: *d, Layer: l}:
 			}
 		}
 		return nil

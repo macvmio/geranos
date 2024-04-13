@@ -110,7 +110,6 @@ func (fs *fscache) Get(h v1.Hash) (v1.Layer, error) {
 		// Is not a "Digest" fallback to uncompressed layer: .link
 		linkContent, err2 := os.ReadFile(shaFilename + ".link")
 		if os.IsNotExist(err2) {
-			fmt.Println("cache.ErrNotFound")
 			return nil, cache.ErrNotFound
 		}
 		if err2 != nil {
@@ -121,27 +120,23 @@ func (fs *fscache) Get(h v1.Hash) (v1.Layer, error) {
 		err = nil
 	}
 	l, err := filesegment.NewLayer(shaFilename)
-	if err != nil {
-		return nil, err
-	}
 	var hashCalculated v1.Hash
-	if isDigest {
-		hashCalculated, err = l.Digest()
-	} else {
-		hashCalculated, err = l.DiffID()
-	}
-	if err != nil {
-		return nil, err
+	if err == nil {
+		if isDigest {
+			hashCalculated, _ = l.Digest()
+		} else {
+			hashCalculated, _ = l.DiffID()
+		}
 	}
 	// Below code handle cases of when cache is corrupted
 	if hashCalculated != h {
-		fmt.Printf("isDigest=%v, expected hash %v, got corrupted hash %v, shaFilename: %v", isDigest, h, hashCalculated, shaFilename)
+		fmt.Printf("isDigest=%v, expected hash %v, got corrupted hash %v, shaFilename: %v\n", isDigest, h, hashCalculated, shaFilename)
 		if err := fs.Delete(h); err != nil {
 			return nil, err
 		}
 		return nil, cache.ErrNotFound
 	}
-	return l, err
+	return l, nil
 }
 
 func (fs *fscache) Delete(h v1.Hash) error {
@@ -153,8 +148,5 @@ func (fs *fscache) Delete(h v1.Hash) error {
 }
 
 func cachepath(path string, h v1.Hash) string {
-	file := h.String()
-	res := filepath.Join(path, file)
-	fmt.Printf("cache path: %s\n", res)
-	return res
+	return filepath.Join(path, h.String())
 }

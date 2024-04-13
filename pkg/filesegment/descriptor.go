@@ -50,6 +50,10 @@ func (d *Descriptor) MediaType() types.MediaType {
 	return MediaType
 }
 
+func (d *Descriptor) String() string {
+	return fmt.Sprintf("descriptor filename=%s[%d-%d]", d.filename, d.start, d.stop)
+}
+
 // parseIntPair parses a string formatted as "<int>-<int>" and returns the two int64 numbers or an error.
 func parseIntPair(s string) (int64, int64, error) {
 	parts := strings.Split(s, "-")
