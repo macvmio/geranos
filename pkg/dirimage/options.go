@@ -17,7 +17,7 @@ type Option func(opts *options)
 func makeOptions(opts ...Option) *options {
 	res := &options{
 		workersCount:             min(8, runtime.NumCPU()),
-		chunkSize:                128 * 1024 * 1024,
+		chunkSize:                64 * 1024 * 1024,
 		printf:                   log.Printf,
 		networkFailureRetryCount: 3,
 	}

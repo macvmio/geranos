@@ -17,33 +17,6 @@ import (
 
 const LocalManifestFilename = ".oci.manifest.json"
 
-func contentMatches(destinationDir string, segment *filesegment.Descriptor) bool {
-	fname := filepath.Join(destinationDir, segment.Filename())
-	/*f, err := os.OpenFile(fname, os.O_RDONLY, 0666)
-	if err != nil {
-		return false
-	}
-	defer func(f *os.File) {
-		err := f.Close()
-		if err != nil {
-			// TODO: lm.opts.printf("error while closing file %v, got %v", segment.Filename(), err)
-		}
-	}(f)*/
-	//  TODO:
-	l, err := filesegment.NewLayer(fname, filesegment.WithRange(segment.Start(), segment.Stop()))
-	if err != nil {
-		return false
-	}
-	d, err := l.Digest()
-	if err != nil {
-		return false
-	}
-	if d == segment.Digest() {
-		return true
-	}
-	return false
-}
-
 func writeToSegment(destinationDir string, segment *filesegment.Descriptor, src io.ReadCloser) (written int64, skipped int64, err error) {
 	// Here: we have io.ReadCloser dumping to a file at given location
 	f, err := filesegment.NewWriter(destinationDir, segment)
