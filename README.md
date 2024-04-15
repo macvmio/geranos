@@ -1,6 +1,13 @@
 # Geranos
 
-In a world where data is as vast as oceans, and speed is the essence of success, there emerges a champion for efficiency and innovation: **Geranos**. Powered by the robust `go-containerregistry` library, Geranos is not your ordinary tool. It's a specialized ally in the era of big data, designed to move mountains—of data, that is. Specifically, it shines when handling gigantic disk images, think epic sagas stored on disk, as large as 20GB or more. Whether you're a digital adventurer transferring VM disk images across the vast expanses of the internet, or a data guardian ensuring your treasure trove of information is safely archived, Geranos is your trusty steed.
+In a world where data is as vast as oceans, and speed is the essence of success,
+there emerges a champion for efficiency and innovation: **Geranos**.
+Powered by the robust `go-containerregistry` library,
+Geranos is not your ordinary tool. It's a specialized ally in the era of big data,
+designed to move mountains—of data, that is.
+Specifically, it shines when handling gigantic disk images,
+think epic sagas stored on disk, as large as 20GB or more.
+Whether you're a digital adventurer transferring VM disk images across the vast expanses of the internet, or a data guardian ensuring your treasure trove of information is safely archived, Geranos is your trusty steed.
 
 ## The Tale of Geranos
 
@@ -36,7 +43,7 @@ First, one must journey to the ancient and ever-expanding archives of GitHub, a 
 
 **Embark on your quest by navigating here:**
 
-[The Vault of Geranos Releases](#)
+[The Vault of Geranos Releases](https://github.com/tomekjarosik/geranos/releases)
 
 Upon arriving, seekers shall find different versions of Geranos, each suited to different lands and architectures. Choose wisely, picking the version that resonates with the essence of your own mystical device.
 
