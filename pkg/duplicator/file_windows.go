@@ -2,17 +2,18 @@ package duplicator
 
 import (
 	"os"
-	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 const fsctlDuplicateExtentsToFile = 0x00094CF4
 
 // duplicateExtentsToFile is a wrapper around the FSCTL_DUPLICATE_EXTENTS_TO_FILE Windows API.
 // It clones the data blocks from the source file handle to the destination file handle.
-func duplicateExtentsToFile(dst, src syscall.Handle, srcLength int64) error {
+func duplicateExtentsToFile(dst, src windows.Handle, srcLength int64) error {
 	type DuplicateExtentsData struct {
-		FileHandle       syscall.Handle
+		FileHandle       windows.Handle
 		SourceFileOffset int64
 		TargetFileOffset int64
 		ByteCount        int64
@@ -23,37 +24,33 @@ func duplicateExtentsToFile(dst, src syscall.Handle, srcLength int64) error {
 		TargetFileOffset: 0,
 		ByteCount:        srcLength,
 	}
-	_, _, err := syscall.Syscall6(
-		syscall.PROC_DEVICE_IO_CONTROL.Addr(),
-		6,
-		uintptr(dst),
+	return windows.DeviceIoControl(
+		dst,
 		fsctlDuplicateExtentsToFile,
-		uintptr(unsafe.Pointer(&data)),
-		unsafe.Sizeof(data),
+		(*byte)(unsafe.Pointer(&data)),
+		uint32(unsafe.Sizeof(data)),
+		nil,
 		0,
-		0,
+		nil,
+		nil,
 	)
-	if err != 0 && err != syscall.Errno(0) {
-		return err
-	}
-	return nil
 }
 
 // CloneFile efficiently clones a file from srcFile to dstFile on Windows.
 func CloneFile(srcFile, dstFile string) error {
-	srcHandle, err := syscall.CreateFile(&(syscall.StringToUTF16(srcFile)[0]),
-		syscall.GENERIC_READ, 0, nil, syscall.OPEN_EXISTING, syscall.FILE_ATTRIBUTE_NORMAL, 0)
+	srcHandle, err := windows.CreateFile(windows.StringToUTF16Ptr(srcFile),
+		windows.GENERIC_READ, 0, nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
 	if err != nil {
 		return os.NewSyscallError("CreateFile src", err)
 	}
-	defer syscall.CloseHandle(srcHandle)
+	defer windows.CloseHandle(srcHandle)
 
-	dstHandle, err := syscall.CreateFile(&(syscall.StringToUTF16(dstFile)[0]),
-		syscall.GENERIC_WRITE, 0, nil, syscall.CREATE_ALWAYS, syscall.FILE_ATTRIBUTE_NORMAL, 0)
+	dstHandle, err := windows.CreateFile(windows.StringToUTF16Ptr(dstFile),
+		windows.GENERIC_WRITE, 0, nil, windows.CREATE_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, 0)
 	if err != nil {
 		return os.NewSyscallError("CreateFile dst", err)
 	}
-	defer syscall.CloseHandle(dstHandle)
+	defer windows.CloseHandle(dstHandle)
 
 	srcFileInfo, err := os.Stat(srcFile)
 	if err != nil {

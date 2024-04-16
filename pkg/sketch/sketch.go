@@ -51,7 +51,7 @@ func (sc *Sketcher) Sketch(dir string, manifest v1.Manifest) (bytesClonedCount i
 	if err != nil {
 		return 0, 0, fmt.Errorf("encountered error while looking for manifests: %w", err)
 	}
-	err = os.MkdirAll(dir, 0o755)
+	err = os.MkdirAll(dir, os.ModePerm)
 	if err != nil {
 		return 0, 0, fmt.Errorf("unable to create directory '%v': %w", dir, err)
 	}

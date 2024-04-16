@@ -9,6 +9,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/tomekjarosik/geranos/pkg/dirimage"
 	"github.com/tomekjarosik/geranos/pkg/filesegment"
+	"runtime"
 
 	"github.com/tomekjarosik/geranos/pkg/duplicator"
 
@@ -46,7 +47,11 @@ func NewMapper(rootDir string, opt ...Option) *Mapper {
 }
 
 func (lm *Mapper) refToDir(ref name.Reference) string {
-	return filepath.Join(lm.rootDir, ref.String())
+	refStr := ref.String()
+	if runtime.GOOS == "windows" {
+		refStr = strings.ReplaceAll(refStr, ":", "@")
+	}
+	return filepath.Join(lm.rootDir, refStr)
 }
 
 func (lm *Mapper) writeToSegment(destinationDir string, segment *filesegment.Descriptor, src io.ReadCloser) (written int64, skipped int64, err error) {
@@ -86,7 +91,7 @@ func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) e
 	destinationDir := lm.refToDir(ref)
 	err := os.MkdirAll(destinationDir, 0o777)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to create directory for writing: %w", err)
 	}
 
 	manifest, err := img.Manifest()
@@ -118,8 +123,8 @@ func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) e
 }
 
 func (lm *Mapper) Read(ctx context.Context, ref name.Reference) (v1.Image, error) {
-
-	img, err := dirimage.Read(ctx, filepath.Join(lm.rootDir, ref.String()), dirimage.WithChunkSize(lm.opts.chunkSize), dirimage.WithLogFunction(lm.opts.printf))
+	refStr := lm.refToDir(ref)
+	img, err := dirimage.Read(ctx, refStr, dirimage.WithChunkSize(lm.opts.chunkSize), dirimage.WithLogFunction(lm.opts.printf))
 	if err != nil {
 		return nil, fmt.Errorf("unable to read dirimage: %w", err)
 	}

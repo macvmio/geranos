@@ -23,7 +23,7 @@ func TestDefaultSketchConstructor_ConstructConstruct(t *testing.T) {
 			manifestBytes, err := img.RawManifest()
 			require.NoError(t, err)
 			localDir := filepath.Join(rootDir, fmt.Sprintf("v%d", i))
-			err = os.MkdirAll(localDir, 0o777)
+			err = os.MkdirAll(localDir, os.ModePerm)
 			require.NoError(t, err)
 
 			require.NoError(t, err)
@@ -160,7 +160,7 @@ func TestSketchConstructor_FindCloneCandidates(t *testing.T) {
 			setup: func(rootDir string) {
 				// Create a directory structure with one manifest
 				dirPath := filepath.Join(rootDir, "directory1")
-				err := os.MkdirAll(dirPath, 0755)
+				err := os.MkdirAll(dirPath, os.ModePerm)
 				require.NoError(t, err)
 				manifestPath := filepath.Join(dirPath, localManifestFile)
 				err = os.WriteFile(manifestPath, []byte("{}"), 0644) // Write an empty JSON object as a placeholder
@@ -172,7 +172,7 @@ func TestSketchConstructor_FindCloneCandidates(t *testing.T) {
 		{
 			name: "no manifest files",
 			setup: func(rootDir string) {
-				err := os.MkdirAll(filepath.Join(rootDir, "directory1"), 0755)
+				err := os.MkdirAll(filepath.Join(rootDir, "directory1"), os.ModePerm)
 				require.NoError(t, err)
 			},
 			expectedLength: 0,
@@ -184,7 +184,7 @@ func TestSketchConstructor_FindCloneCandidates(t *testing.T) {
 				// Create a directory structure with one manifest
 				for i := 0; i < 5; i++ {
 					dirPath := filepath.Join(rootDir, fmt.Sprintf("directory%d", i))
-					err := os.MkdirAll(dirPath, 0755)
+					err := os.MkdirAll(dirPath, os.ModePerm)
 					require.NoError(t, err)
 					err = os.WriteFile(filepath.Join(dirPath, localManifestFile), []byte("{}"), 0644)
 					require.NoError(t, err)

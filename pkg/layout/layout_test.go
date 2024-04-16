@@ -119,10 +119,10 @@ func TestLayoutMapper_Write_MustOptimizeDiskSpace(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 	testRepoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
-	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), 0o777)
+	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), os.ModePerm)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 	optimalRepoDir := path.Join(tempDir, "oci.jarosik.online/optimalrepo")
-	err = os.MkdirAll(path.Join(optimalRepoDir, "a:v1"), 0o777)
+	err = os.MkdirAll(path.Join(optimalRepoDir, "a:v1"), os.ModePerm)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 
 	MB := int64(1024 * 1024)
@@ -164,7 +164,7 @@ func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 	require.NoErrorf(t, err, "unable to create temp dir: %v", err)
 	defer os.RemoveAll(tempDir)
 	testRepoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
-	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), 0o777)
+	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), os.ModePerm)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 	const chunkSize = 10
 	lm := NewMapper(tempDir, WithChunkSize(chunkSize))
@@ -210,7 +210,7 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 	require.NoErrorf(t, err, "unable to create temp dir: %v", err)
 	defer os.RemoveAll(tempDir)
 	testRepoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
-	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), 0o777)
+	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), os.ModePerm)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 	const chunkSize = 10
 	lm := NewMapper(tempDir, WithChunkSize(chunkSize))
@@ -271,7 +271,7 @@ func TestLayoutMapper_Write_MultipleConcurrentWorkers(t *testing.T) {
 	require.NoErrorf(t, err, "unable to create temp dir: %v", err)
 	defer os.RemoveAll(tempDir)
 	testRepoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
-	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), 0o777)
+	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), os.ModePerm)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 	logF := func(fmt string, argv ...any) {}
 	const chunkSize = 11
