@@ -14,7 +14,7 @@ func Push(imageRef string, opt ...Option) error {
 
 	ref, err := name.ParseReference(imageRef)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to parse reference '%v': %w", imageRef, err)
 	}
 
 	lm := layout.NewMapper(opts.imagesPath)
