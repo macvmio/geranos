@@ -44,7 +44,7 @@ func makeFileAt(t *testing.T, filename, content string) {
 
 func makeTestVMAt(t *testing.T, tempDir, ref string) (sha string) {
 	d := filepath.Join(tempDir, "images", ref)
-	err := os.MkdirAll(d, 0o777)
+	err := os.MkdirAll(d, os.ModePerm)
 	assert.NoError(t, err)
 	require.NoError(t, err)
 	makeFileAt(t, filepath.Join(d, "disk.img"), "some fake image data")

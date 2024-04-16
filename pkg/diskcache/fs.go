@@ -30,7 +30,7 @@ type teeLayer struct {
 }
 
 func (l *teeLayer) create(digest v1.Hash, diffID v1.Hash) (io.WriteCloser, error) {
-	if err := os.MkdirAll(l.path, 0700); err != nil {
+	if err := os.MkdirAll(l.path, os.ModePerm); err != nil {
 		return nil, fmt.Errorf("unable to create directories: %w", err)
 	}
 	f, err := os.Create(cachepath(l.path, digest))
