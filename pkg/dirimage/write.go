@@ -56,7 +56,6 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 		return errors.New("invalid image")
 	}
 	opts := makeOptions(opt...)
-	opts.printf("options: %#v\n", opts)
 
 	type Job struct {
 		Descriptor filesegment.Descriptor
