@@ -1,6 +1,7 @@
 package duplicator
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -9,12 +10,12 @@ func CloneDirectory(srcDir, dstDir string, recursive bool) error {
 	// Read the contents of the source directory
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to read dir '%v': %w", srcDir, err)
 	}
 
 	err = os.MkdirAll(dstDir, os.ModePerm)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create dst directory '%v': %w", dstDir, err)
 	}
 
 	for _, entry := range entries {

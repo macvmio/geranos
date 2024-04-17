@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/validate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tomekjarosik/geranos/pkg/dirimage"
 	"github.com/tomekjarosik/geranos/pkg/duplicator"
 	"github.com/tomekjarosik/geranos/pkg/filesegment"
 	"io"
@@ -53,7 +54,7 @@ func TestLayoutMapper_Read_VariousChunkSizes(t *testing.T) {
 	require.NoErrorf(t, err, "unable to parse destination reference: %v", err)
 
 	for chunkSize := int64(1); chunkSize < 10; chunkSize++ {
-		lmSrc := NewMapper("testdata", WithChunkSize(chunkSize))
+		lmSrc := NewMapper("testdata", dirimage.WithChunkSize(chunkSize))
 		img, err := lmSrc.Read(context.Background(), srcRef)
 		require.NoErrorf(t, err, "unable to read image: %v", err)
 		err = validate.Image(img, validate.Fast)
@@ -133,7 +134,7 @@ func TestLayoutMapper_Write_MustOptimizeDiskSpace(t *testing.T) {
 	hashBefore := hashFromFile(t, randomFileName)
 	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1"))
 	require.NoErrorf(t, err, "unable to parse reference: %v", err)
-	lm := NewMapper(tempDir, WithChunkSize(chunkSize))
+	lm := NewMapper(tempDir, dirimage.WithChunkSize(chunkSize))
 	img1, err := lm.Read(ctx, srcRef)
 	require.NoErrorf(t, err, "unable to read disk image: %v", err)
 	for i := 2; i < 12; i++ {
@@ -147,7 +148,7 @@ func TestLayoutMapper_Write_MustOptimizeDiskSpace(t *testing.T) {
 		assert.Equal(t, hashBefore, hashFromFile(t, filepath.Join(testRepoDir, fmt.Sprintf("a:v%d", i), "disk.img")))
 	}
 	for _, repo := range []string{testRepoDir, optimalRepoDir} {
-		diskUsage, err := directoryDiskUsage(testRepoDir)
+		diskUsage, err := DirectoryDiskUsage(testRepoDir)
 		require.NoErrorf(t, err, "unable to calculate disk usage: %v", err)
 		fmt.Printf("[%v] total disk used: %v\n", repo, diskUsage)
 	}
@@ -167,7 +168,7 @@ func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), os.ModePerm)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 	const chunkSize = 10
-	lm := NewMapper(tempDir, WithChunkSize(chunkSize))
+	lm := NewMapper(tempDir, dirimage.WithChunkSize(chunkSize))
 	err = generateRandomFile(path.Join(testRepoDir, "a:v1/disk.img"), 100*chunkSize)
 	require.NoErrorf(t, err, "unable to generate file: %v", err)
 
@@ -213,7 +214,7 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), os.ModePerm)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 	const chunkSize = 10
-	lm := NewMapper(tempDir, WithChunkSize(chunkSize))
+	lm := NewMapper(tempDir, dirimage.WithChunkSize(chunkSize))
 	randomFilename := path.Join(testRepoDir, "a:v1/disk.img")
 	err = generateRandomFile(randomFilename, 100*chunkSize)
 	require.NoErrorf(t, err, "unable to generate file: %v", err)
@@ -275,7 +276,7 @@ func TestLayoutMapper_Write_MultipleConcurrentWorkers(t *testing.T) {
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 	logF := func(fmt string, argv ...any) {}
 	const chunkSize = 11
-	lm := NewMapper(tempDir, WithChunkSize(chunkSize), WithLogFunction(logF))
+	lm := NewMapper(tempDir, dirimage.WithChunkSize(chunkSize), dirimage.WithLogFunction(logF))
 	err = generateRandomFile(path.Join(testRepoDir, "a:v1/disk.img"), 200*chunkSize)
 	require.NoErrorf(t, err, "unable to generate file: %v", err)
 
@@ -288,7 +289,7 @@ func TestLayoutMapper_Write_MultipleConcurrentWorkers(t *testing.T) {
 	for workersCount := 1; workersCount < 10; workersCount++ {
 		t.Run(fmt.Sprintf("Write-with-%d-workers", workersCount), func(t *testing.T) {
 
-			lm2 := NewMapper(tempDir, WithChunkSize(chunkSize), WithWorkersCount(workersCount), WithLogFunction(logF))
+			lm2 := NewMapper(tempDir, dirimage.WithChunkSize(chunkSize), dirimage.WithWorkersCount(workersCount), dirimage.WithLogFunction(logF))
 			dstRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v%d", workersCount))
 			require.NoError(t, err)
 			err = lm2.Write(ctx, img1, dstRef)

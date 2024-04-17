@@ -28,7 +28,7 @@ type Mapper struct {
 	rootDir  string
 	sketcher *sketch.Sketcher
 
-	opts  *options
+	opts  []dirimage.Option
 	stats Statistics
 }
 
@@ -38,11 +38,11 @@ type Layout struct {
 	Sizes     []int64
 }
 
-func NewMapper(rootDir string, opt ...Option) *Mapper {
+func NewMapper(rootDir string, opts ...dirimage.Option) *Mapper {
 	return &Mapper{
 		rootDir:  rootDir,
 		sketcher: sketch.NewSketcher(rootDir, dirimage.LocalManifestFilename),
-		opts:     makeOptions(opt...),
+		opts:     opts,
 	}
 }
 
@@ -63,7 +63,7 @@ func (lm *Mapper) writeToSegment(destinationDir string, segment *filesegment.Des
 	defer func(f *os.File) {
 		err := f.Close()
 		if err != nil {
-			lm.opts.printf("error while closing file %v, got %v", segment.Filename(), err)
+			fmt.Printf("error while closing file %v, got %v", segment.Filename(), err)
 		}
 	}(f)
 
@@ -110,7 +110,7 @@ func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) e
 	if err != nil {
 		return fmt.Errorf("unable to convert to dirimage: %w", err)
 	}
-	err = convertedImage.Write(ctx, destinationDir, dirimage.WithWorkersCount(lm.opts.workersCount), dirimage.WithLogFunction(lm.opts.printf))
+	err = convertedImage.Write(ctx, destinationDir, lm.opts...)
 	if err != nil {
 		return fmt.Errorf("unable to write dirimage to '%v': %w", destinationDir, err)
 	}
@@ -124,7 +124,7 @@ func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) e
 
 func (lm *Mapper) Read(ctx context.Context, ref name.Reference) (v1.Image, error) {
 	refStr := lm.refToDir(ref)
-	img, err := dirimage.Read(ctx, refStr, dirimage.WithChunkSize(lm.opts.chunkSize), dirimage.WithLogFunction(lm.opts.printf))
+	img, err := dirimage.Read(ctx, refStr, lm.opts...)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read dirimage: %w", err)
 	}
@@ -168,7 +168,7 @@ func (lm *Mapper) Adopt(src string, ref name.Reference, failIfContainsSubdirecto
 		return fmt.Errorf("directory with subdirectories are not supported")
 	}
 	if failIfContainsSubdirectories {
-		lm.opts.printf("warning: subdirectories will be ignored")
+		fmt.Printf("warning: subdirectories will be ignored")
 	}
 	return duplicator.CloneDirectory(src, lm.refToDir(ref), false)
 }
@@ -216,7 +216,7 @@ func (lm *Mapper) List() ([]Properties, error) {
 		if err != nil {
 			dirSize = -1
 		}
-		diskUsage, err := directoryDiskUsage(path)
+		diskUsage, err := DirectoryDiskUsage(path)
 		if err != nil {
 			return err
 		}

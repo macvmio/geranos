@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// directoryDiskUsage returns the disk usage of the specified directory.
-func directoryDiskUsage(path string) (string, error) {
+// DirectoryDiskUsage returns the disk usage of the specified directory.
+func DirectoryDiskUsage(path string) (string, error) {
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
