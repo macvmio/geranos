@@ -111,3 +111,33 @@ func TestPullAndPush_multipleSlightlyDifferentTags(t *testing.T) {
 		fmt.Println(layout.DirectoryDiskUsage(tempDir))
 	})
 }
+
+func TestPullAndPush_pullSmallerImageAfterPullingLargerImage(t *testing.T) {
+	recordedRequests := make([]http.Request, 0)
+	s := httptest.NewServer(prepareRegistryWithRecorder(&recordedRequests))
+	defer s.Close()
+
+	tempDir, opts := optionsForTesting(t)
+
+	ref1 := refOnServer(s.URL, "test-vm:1.0")
+	hash1 := makeTestVMWithContent(t, tempDir, ref1, "testvm123456789")
+	err := Push(ref1, opts...)
+	assert.NoError(t, err)
+	deleteTestVMAt(t, tempDir, ref1)
+
+	ref2 := refOnServer(s.URL, "test-vm:2.0")
+	hash2 := makeTestVMWithContent(t, tempDir, ref2, "testvm123456789appendix")
+	err = Push(ref2, opts...)
+	assert.NoError(t, err)
+	deleteTestVMAt(t, tempDir, ref2)
+
+	err = Pull(ref2, opts...)
+	require.NoError(t, err)
+	err = Pull(ref1, opts...)
+
+	hash1After := hashFromFile(t, filepath.Join(tempDir, "images", ref1, "disk.img"))
+	hash2After := hashFromFile(t, filepath.Join(tempDir, "images", ref2, "disk.img"))
+
+	assert.Equal(t, hash1, hash1After)
+	assert.Equal(t, hash2, hash2After)
+}

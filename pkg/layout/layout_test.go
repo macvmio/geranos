@@ -299,3 +299,40 @@ func TestLayoutMapper_Write_MultipleConcurrentWorkers(t *testing.T) {
 		})
 	}
 }
+
+func TestLayoutMapper_Write_MustOverwriteBiggerFileIfAlreadyExist(t *testing.T) {
+	ctx := context.Background()
+	tempDir, err := os.MkdirTemp("", "content-matches-*")
+	require.NoErrorf(t, err, "unable to create temp dir: %v", err)
+	defer os.RemoveAll(tempDir)
+	testRepoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
+	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), os.ModePerm)
+	require.NoErrorf(t, err, "unable to create directory: %v", err)
+	logF := func(fmt string, argv ...any) {}
+	const chunkSize = 5
+	lm := NewMapper(tempDir, dirimage.WithChunkSize(chunkSize), dirimage.WithLogFunction(logF))
+	err = generateRandomFile(path.Join(testRepoDir, "a:v1/disk.img"), 10*chunkSize)
+	require.NoErrorf(t, err, "unable to generate file: %v", err)
+
+	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1"))
+	require.NoErrorf(t, err, "unable to parse reference: %v", err)
+	beforeHash := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v1/disk.img"))
+	img1, err := lm.Read(ctx, srcRef)
+	require.NoErrorf(t, err, "unable to read disk image: %v", err)
+
+	dstRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v2"))
+	err = lm.Write(ctx, img1, dstRef)
+	require.NoError(t, err)
+	hash2 := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v2/disk.img"))
+	assert.Equal(t, beforeHash, hash2)
+
+	err = appendRandomBytesToFile(path.Join(tempDir, "oci.jarosik.online/testrepo/a:v2/disk.img"), 11)
+	require.NoError(t, err)
+	hash3 := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v2/disk.img"))
+	require.NotEqual(t, beforeHash, hash3)
+
+	err = lm.Write(ctx, img1, dstRef)
+	require.NoError(t, err)
+	hash4 := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v2/disk.img"))
+	assert.Equal(t, beforeHash, hash4)
+}

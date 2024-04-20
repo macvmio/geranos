@@ -68,6 +68,17 @@ func makeTestVMAt(t *testing.T, tempDir, ref string) (sha string) {
 	return hashFromFile(t, filepath.Join(d, "disk.img"))
 }
 
+func makeTestVMWithContent(t *testing.T, tempDir, ref string, content string) (sha string) {
+	t.Helper()
+	d := filepath.Join(tempDir, "images", ref)
+	err := os.MkdirAll(d, os.ModePerm)
+	assert.NoError(t, err)
+	require.NoError(t, err)
+	makeFileAt(t, filepath.Join(d, "disk.img"), content)
+
+	return hashFromFile(t, filepath.Join(d, "disk.img"))
+}
+
 func makeRandomFile(t *testing.T, fileName string, size int64) error {
 	t.Helper()
 	// Open a file for writing, creating it with 0666 permissions if it does not exist

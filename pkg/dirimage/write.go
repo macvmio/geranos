@@ -9,6 +9,7 @@ import (
 	"github.com/tomekjarosik/geranos/pkg/sparsefile"
 	"golang.org/x/sync/errgroup"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -27,7 +28,7 @@ func writeToSegment(destinationDir string, segment *filesegment.Descriptor, src 
 	defer func(f *os.File) {
 		err := f.Close()
 		if err != nil {
-			// TODO: opts.printf("error while closing file %v, got %v", segment.Filename(), err)
+			log.Printf("error while closing file %v, got %v", segment.Filename(), err)
 		}
 	}(f)
 
@@ -49,6 +50,26 @@ func writeLayer(destinationDir string, segment *filesegment.Descriptor, layer v1
 	}
 	defer rc.Close()
 	return writeToSegment(destinationDir, segment, rc)
+}
+
+func truncateFiles(destinationDir string, segmentDescriptors []*filesegment.Descriptor) error {
+	fileSizesMap := make(map[string]int64)
+	for _, d := range segmentDescriptors {
+		size, present := fileSizesMap[d.Filename()]
+		if !present {
+			size = d.Stop() + 1
+		}
+		size = max(size, d.Stop()+1)
+		fileSizesMap[d.Filename()] = size
+	}
+
+	for filename, size := range fileSizesMap {
+		err := os.Truncate(filepath.Join(destinationDir, filename), size)
+		if err != nil {
+			return fmt.Errorf("error while truncating file '%v': %w", filename, err)
+		}
+	}
+	return nil
 }
 
 func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Option) error {
@@ -123,5 +144,11 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 	if err != nil {
 		return err
 	}
+
+	err = truncateFiles(destinationDir, di.segmentDescriptors)
+	if err != nil {
+		return err
+	}
+
 	return os.WriteFile(filepath.Join(destinationDir, LocalManifestFilename), rawManifest, 0o777)
 }
