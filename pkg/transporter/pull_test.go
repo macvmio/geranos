@@ -48,8 +48,9 @@ func TestPullAndPush_pullingAgainShouldNotDownloadAnyBlob(t *testing.T) {
 		assert.NoError(t, err)
 		shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", ref, "disk.img"))
 		assert.Equal(t, shaBefore, shaAfter)
-		assert.Equal(t, 3, calculateAccessed(recordedRequests, "GET", "/blobs"))
+		assert.Equal(t, 2, calculateAccessed(recordedRequests, "GET", "/blobs"))
 	})
+	clear(recordedRequests)
 
 	t.Run("pulling same reference second time", func(t *testing.T) {
 		err = Pull(ref, opts...)
@@ -57,7 +58,7 @@ func TestPullAndPush_pullingAgainShouldNotDownloadAnyBlob(t *testing.T) {
 		shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", ref, "disk.img"))
 		assert.Equal(t, shaBefore, shaAfter)
 
-		assert.Equal(t, 3, calculateAccessed(recordedRequests, "GET", "/blobs"))
+		assert.Equal(t, 0, calculateAccessed(recordedRequests, "GET", "/blobs"))
 	})
 }
 
@@ -94,7 +95,7 @@ func TestPullAndPush_multipleSlightlyDifferentTags(t *testing.T) {
 	tempDir, opts = optionsForTesting(t)
 
 	t.Run("pulling must avoid downloading same blobs", func(t *testing.T) {
-		expectedBlobDownloads := []int{0, 4, 6, 8, 11}
+		expectedBlobDownloads := []int{0, 3, 4, 5, 7}
 		checksumsDownloaded := make([]string, 5)
 		for i := 1; i <= 4; i++ {
 			ithRef := refOnServer(s.URL, fmt.Sprintf("test-vm:1.%d", i))
