@@ -27,14 +27,14 @@ func CloneDirectory(srcDir, dstDir string, recursive bool) error {
 				// If the entry is a directory, recursively clone it
 				err = CloneDirectory(srcPath, dstPath, recursive)
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to clone src directory '%v' to destination '%v': %w", srcPath, dstPath, err)
 				}
 			}
 		} else {
 			// If the entry is a file, clone it
 			err = CloneFile(srcPath, dstPath)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to clone src file '%v' to destination '%v': %w", srcPath, dstPath, err)
 			}
 		}
 	}

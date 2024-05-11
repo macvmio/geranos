@@ -2,6 +2,7 @@ package duplicator
 
 import (
 	"errors"
+	"fmt"
 	"os/exec"
 )
 
@@ -15,7 +16,7 @@ func CloneFile(srcFile, dstFile string) error {
 	// Execute cp with --reflink=auto to attempt efficient cloning
 	cmd := exec.Command("cp", "--reflink=auto", srcFile, dstFile)
 	if err := cmd.Run(); err != nil {
-		return err
+		return fmt.Errorf("command '%v' failed: %w", cmd, err)
 	}
 
 	return nil
