@@ -200,7 +200,7 @@ func (lm *Mapper) ContainsManifest(ref name.Reference) bool {
 func (lm *Mapper) List() ([]Properties, error) {
 	res := make([]Properties, 0)
 	err := filepath.WalkDir(lm.rootDir, func(path string, d fs.DirEntry, err error) error {
-		if !d.IsDir() {
+		if d == nil || !d.IsDir() {
 			return nil
 		}
 		processedPath := strings.TrimPrefix(path, lm.rootDir)
