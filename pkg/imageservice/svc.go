@@ -15,13 +15,12 @@ import (
 )
 
 type Server struct {
-	rootDir string
+	lm *layout.Mapper
 	runtimeapi.UnimplementedImageServiceServer
 }
 
 func (s *Server) ListImages(ctx context.Context, in *runtimeapi.ListImagesRequest) (*runtimeapi.ListImagesResponse, error) {
-	lm := layout.NewMapper(s.rootDir)
-	props, err := lm.List()
+	props, err := s.lm.List()
 	if err != nil {
 		return nil, fmt.Errorf("unable to obtain list of images: %w", err)
 	}
@@ -55,8 +54,7 @@ func (s *Server) ImageStatus(ctx context.Context, req *runtimeapi.ImageStatusReq
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "image refereence parse error: %s", err.Error())
 	}
-	lm := layout.NewMapper(s.rootDir)
-	_, err = lm.Read(ctx, ref)
+	_, err = s.lm.Read(ctx, ref)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "reading image from disk resulted in error: %s", err.Error())
 	}
@@ -108,8 +106,7 @@ func (s *Server) PullImage(ctx context.Context, req *runtimeapi.PullImageRequest
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to pull image: %s", err.Error())
 	}
-	lm := layout.NewMapper(s.rootDir)
-	err = lm.Write(ctx, img, ref)
+	err = s.lm.Write(ctx, img, ref)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "image write error: %s", err.Error())
 	}
@@ -127,8 +124,7 @@ func (s *Server) RemoveImage(ctx context.Context, req *runtimeapi.RemoveImageReq
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "image reference parse error: %s", err.Error())
 	}
-	lm := layout.NewMapper(s.rootDir)
-	err = lm.Remove(ref)
+	err = s.lm.Remove(ref)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to remove image: %s", err.Error())
 	}
@@ -147,5 +143,5 @@ func LoggingInterceptor(ctx context.Context, req interface{}, info *grpc.UnarySe
 }
 
 func NewImageService(dir string) *Server {
-	return &Server{rootDir: dir}
+	return &Server{lm: layout.NewMapper(dir)}
 }
