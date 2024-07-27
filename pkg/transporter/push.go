@@ -34,9 +34,10 @@ func Push(imageRef string, opt ...Option) error {
 	g, _ := errgroup.WithContext(opts.ctx)
 	g.SetLimit(opts.workersCount)
 	for _, l := range layers {
+		currentLayer := l
 		g.Go(func() error {
-			fmt.Printf("pushing %v\n", l)
-			return remote.WriteLayer(ref.Context(), l, opts.remoteOptions...)
+			fmt.Printf("pushing %v\n", currentLayer)
+			return remote.WriteLayer(ref.Context(), currentLayer, opts.remoteOptions...)
 		})
 	}
 	err = g.Wait()
