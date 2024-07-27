@@ -8,10 +8,11 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/spf13/cobra"
-	"io"
+	"golang.org/x/term"
 	"log"
 	"os"
 	"strings"
+	"syscall"
 )
 
 // Inspired by https://github.com/google/go-containerregistry/blob/main/cmd/crane/cmd/auth.go
@@ -58,12 +59,12 @@ type loginOptions struct {
 
 func login(opts loginOptions) error {
 	if opts.passwordStdin {
-		contents, err := io.ReadAll(os.Stdin)
+		bytePassword, err := term.ReadPassword(syscall.Stdin)
 		if err != nil {
 			return err
 		}
 
-		opts.password = strings.TrimSuffix(string(contents), "\n")
+		opts.password = strings.TrimSuffix(string(bytePassword), "\n")
 		opts.password = strings.TrimSuffix(opts.password, "\r")
 	}
 	if opts.user == "" && opts.password == "" {
