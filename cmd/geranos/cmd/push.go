@@ -10,7 +10,8 @@ import (
 
 func NewCmdPush() *cobra.Command {
 	var (
-		mountedReference string // Declares a variable to hold the value of the "--mountable-image" flag.
+		flagMountedReference  string // Declares a variable to hold the value of the "--mountable-image" flag.
+		flagConcurrentWorkers int
 	)
 
 	var pushCmd = &cobra.Command{
@@ -29,12 +30,13 @@ func NewCmdPush() *cobra.Command {
 			opts := []transporter.Option{
 				transporter.WithImagesPath(imagesDir),
 				transporter.WithContext(cmd.Context()),
+				transporter.WithWorkersCount(flagConcurrentWorkers),
 			}
 
 			// Since mountedReference is directly bound to the flag,
 			// we can just check if it's not empty and append the option.
-			if mountedReference != "" {
-				ref, err := name.ParseReference(mountedReference, name.StrictValidation)
+			if flagMountedReference != "" {
+				ref, err := name.ParseReference(flagMountedReference, name.StrictValidation)
 				if err != nil {
 					fmt.Println("invalid format of mounted reference")
 					return
@@ -52,8 +54,11 @@ func NewCmdPush() *cobra.Command {
 	}
 
 	// Binding the "--mountable-image" flag directly to the mountedReference variable.
-	pushCmd.Flags().StringVar(&mountedReference, "mount", "",
+	pushCmd.Flags().StringVar(&flagMountedReference, "mount", "",
 		"Specifies an image reference that can be mounted to avoid uploading layers that exists in the registry")
+
+	pushCmd.Flags().IntVar(&flagConcurrentWorkers, "concurrent-workers", 8,
+		"Specifies number of concurrent workers to use when uploading layers to a registry")
 
 	return pushCmd
 }
