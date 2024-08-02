@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"github.com/google/go-containerregistry/cmd/crane/cmd"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"os"
 	"os/signal"
-	"strings"
 )
 
 func InitializeCommands() *cobra.Command {
@@ -27,13 +27,12 @@ It relies on sparse files and Copy-on-Write filesystem features to optimize disk
 		},
 	}
 
-	// Customizing unknown command handling
-	rootCmd.SilenceErrors = false
-	rootCmd.SilenceUsage = false
-	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
-		fmt.Printf("Error: '%s' is not a known command\n\n", strings.Join(args, " "))
-		fmt.Println("Use 'geranos --help' for a list of available commands.")
-	})
+	// Define the --verbose global flag
+	var verbose bool
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
+
+	// Bind the verbose flag to Viper
+	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
 
 	rootCmd.AddCommand(
 		NewCmdPull(),

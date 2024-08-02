@@ -22,6 +22,7 @@ func NewCmdPull() *cobra.Command {
 			opts := []transporter.Option{
 				transporter.WithImagesPath(imagesDir),
 				transporter.WithContext(cmd.Context()),
+				transporter.WithVerbose(viper.GetBool("verbose")),
 			}
 			return transporter.Pull(src, opts...)
 		},

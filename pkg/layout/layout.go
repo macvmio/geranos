@@ -98,6 +98,9 @@ func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) e
 	if err != nil {
 		return err
 	}
+	for _, layer := range manifest.Layers {
+		lm.stats.Add(&Statistics{SourceBytesCount: layer.Size})
+	}
 
 	bytesClonedCount, matchedSegmentsCount, err := lm.sketcher.Sketch(destinationDir, *manifest)
 	if err != nil {

@@ -3,6 +3,7 @@ package layout
 import "sync/atomic"
 
 type Statistics struct {
+	SourceBytesCount     int64
 	BytesWrittenCount    int64
 	BytesSkippedCount    int64
 	BytesReadCount       int64
@@ -18,6 +19,7 @@ func (s *Statistics) Add(other *Statistics) {
 	atomic.AddInt64(&s.BytesClonedCount, other.BytesClonedCount)
 	atomic.AddInt64(&s.CompressedBytesCount, other.CompressedBytesCount)
 	atomic.AddInt64(&s.MatchedSegmentsCount, other.MatchedSegmentsCount)
+	atomic.AddInt64(&s.SourceBytesCount, other.SourceBytesCount)
 }
 
 func (s *Statistics) Clear() {

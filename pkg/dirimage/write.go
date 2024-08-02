@@ -72,6 +72,16 @@ func truncateFiles(destinationDir string, segmentDescriptors []*filesegment.Desc
 	return nil
 }
 
+func sendProgressUpdate(progressChan chan<- ProgressUpdate, current, total int64) {
+	select {
+	case progressChan <- ProgressUpdate{
+		BytesProcessed: current,
+		BytesTotal:     total,
+	}:
+	default:
+	}
+}
+
 func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Option) error {
 	if di.Image == nil {
 		return errors.New("invalid image")
@@ -86,7 +96,7 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 		Job Job
 		err error
 	}
-
+	bytesTotal := di.Length()
 	jobs := make(chan Job, opts.workersCount)
 	g, ctx := errgroup.WithContext(ctx)
 	layerOpts := []filesegment.LayerOpt{filesegment.WithLogFunction(opts.printf)}
@@ -94,7 +104,7 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 		g.Go(func() error {
 			for job := range jobs {
 				atomic.AddInt64(&di.BytesReadCount, job.Descriptor.Length())
-
+				sendProgressUpdate(opts.progress, di.BytesReadCount, bytesTotal)
 				if filesegment.Matches(&job.Descriptor, destinationDir, layerOpts...) {
 					opts.printf("existing layer: %v\n", &job.Descriptor)
 					continue

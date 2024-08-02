@@ -9,10 +9,11 @@ import (
 
 func NewListCommand() *cobra.Command {
 	var listCmd = &cobra.Command{
-		Use:   "list",
-		Short: "List all OCI images in a specific repository.",
-		Long:  `Lists all available OCI images in the specified container registry or repository, providing a quick overview of the stored images.`,
-		Args:  cobra.ExactArgs(0),
+		Use:     "list",
+		Short:   "List all OCI images in a specific repository.",
+		Long:    `Lists all available OCI images in the specified container registry or repository, providing a quick overview of the stored images.`,
+		Args:    cobra.ExactArgs(0),
+		Aliases: []string{"ls"},
 		Run: func(cmd *cobra.Command, args []string) {
 			imagesDir := viper.GetString("images_directory")
 			if len(imagesDir) == 0 {

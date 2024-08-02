@@ -10,6 +10,7 @@ type options struct {
 	chunkSize                int64
 	printf                   func(fmt string, argv ...any)
 	networkFailureRetryCount int
+	progress                 chan<- ProgressUpdate
 }
 
 type Option func(opts *options)
@@ -44,5 +45,11 @@ func WithWorkersCount(workersCount int) Option {
 func WithLogFunction(log func(fmt string, args ...any)) Option {
 	return func(o *options) {
 		o.printf = log
+	}
+}
+
+func WithProgressChannel(progress chan<- ProgressUpdate) Option {
+	return func(o *options) {
+		o.progress = progress
 	}
 }

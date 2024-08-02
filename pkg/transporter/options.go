@@ -15,6 +15,7 @@ type options struct {
 	remoteOptions    []remote.Option
 	refValidation    name.Option
 	workersCount     int
+	verbose          bool
 	ctx              context.Context
 }
 
@@ -57,6 +58,12 @@ func WithContext(ctx context.Context) Option {
 	}
 }
 
+func WithVerbose(verbose bool) Option {
+	return func(o *options) {
+		o.verbose = verbose
+	}
+}
+
 func makeOptions(opts ...Option) *options {
 	res := options{
 		imagesPath:       mustExpandUser("~/.geranos/images"),
@@ -68,6 +75,7 @@ func makeOptions(opts ...Option) *options {
 		},
 		refValidation: name.StrictValidation,
 		workersCount:  8,
+		verbose:       false,
 		ctx:           context.Background(),
 	}
 	for _, o := range opts {
