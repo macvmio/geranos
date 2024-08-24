@@ -6,7 +6,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
-	"github.com/tomekjarosik/geranos/pkg/filesegment"
+	"github.com/mobileinf/geranos/pkg/filesegment"
 	"golang.org/x/sync/errgroup"
 	"os"
 	"path/filepath"

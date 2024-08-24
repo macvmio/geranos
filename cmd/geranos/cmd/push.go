@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/mobileinf/geranos/pkg/transporter"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/tomekjarosik/geranos/pkg/transporter"
 )
 
 func NewCmdPush() *cobra.Command {

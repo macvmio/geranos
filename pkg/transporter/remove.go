@@ -3,7 +3,7 @@ package transporter
 import (
 	"fmt"
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/tomekjarosik/geranos/pkg/layout"
+	"github.com/mobileinf/geranos/pkg/layout"
 )
 
 func Remove(src string, opt ...Option) error {

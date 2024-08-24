@@ -2,7 +2,7 @@ package transporter
 
 import (
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/tomekjarosik/geranos/pkg/layout"
+	"github.com/mobileinf/geranos/pkg/layout"
 )
 
 func Clone(src string, dst string, opt ...Option) error {

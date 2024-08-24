@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/tomekjarosik/geranos/pkg/dirimage"
-	"github.com/tomekjarosik/geranos/pkg/layout"
+	"github.com/mobileinf/geranos/pkg/dirimage"
+	"github.com/mobileinf/geranos/pkg/layout"
 	"log"
 	"strings"
 )

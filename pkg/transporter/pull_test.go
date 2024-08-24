@@ -2,9 +2,9 @@ package transporter
 
 import (
 	"fmt"
+	"github.com/mobileinf/geranos/pkg/layout"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tomekjarosik/geranos/pkg/layout"
 	"net/http"
 	"net/http/httptest"
 	"os"
