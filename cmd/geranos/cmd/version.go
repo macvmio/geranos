@@ -8,7 +8,7 @@ import (
 )
 
 // Version can be set via:
-// -ldflags="-X 'github.com/tomekjarosik/geranos/cmd/geranos/cmd.Version=$TAG'"
+// -ldflags="-X 'github.com/mobileinf/geranos/cmd/geranos/cmd.Version=$TAG'"
 var Version string
 
 func init() {

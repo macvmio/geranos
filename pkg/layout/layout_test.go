@@ -336,3 +336,36 @@ func TestLayoutMapper_Write_MustOverwriteBiggerFileIfAlreadyExist(t *testing.T) 
 	hash4 := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v2/disk.img"))
 	assert.Equal(t, beforeHash, hash4)
 }
+
+func TestLayoutMapper_ContainsAny(t *testing.T) {
+	ref, err := name.ParseReference("example.com/repo/image:tag")
+	assert.NoError(t, err)
+
+	// Test case 1: Directory exists
+	t.Run("Directory exists", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-directory-*")
+		assert.NoError(t, err)
+		lm := &Mapper{rootDir: tmpDir}
+		defer os.RemoveAll(tmpDir) // Clean up after the test
+
+		dir := filepath.Join(tmpDir, ref.String())
+		err = os.MkdirAll(dir, 0755)
+		assert.NoError(t, err)
+
+		exists, err := lm.ContainsAny(ref)
+		assert.NoError(t, err)
+		assert.True(t, exists)
+	})
+
+	// Test case 2: Directory does not exist
+	t.Run("Directory does not exist", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "test-directory-*")
+		assert.NoError(t, err)
+		lm := &Mapper{rootDir: tmpDir}
+		defer os.RemoveAll(tmpDir) // Clean up after the test
+
+		exists, err := lm.ContainsAny(ref)
+		assert.NoError(t, err)
+		assert.False(t, exists)
+	})
+}

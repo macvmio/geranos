@@ -200,6 +200,19 @@ func (lm *Mapper) ContainsManifest(ref name.Reference) bool {
 	return true
 }
 
+// ContainsAny returns true if there is a directory corresponding to the provided reference
+// It does not validate if that directory contains anything useful
+func (lm *Mapper) ContainsAny(ref name.Reference) (bool, error) {
+	info, err := os.Stat(lm.refToDir(ref))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return info.IsDir(), nil
+}
+
 func (lm *Mapper) List() ([]Properties, error) {
 	res := make([]Properties, 0)
 	err := filepath.WalkDir(lm.rootDir, func(path string, d fs.DirEntry, err error) error {
