@@ -19,12 +19,13 @@ func precompute(ctx context.Context, layers []*filesegment.Layer, workersCount i
 	jobs := make(chan *filesegment.Layer, workersCount)
 	g, ctx := errgroup.WithContext(ctx)
 
+	var aBytesReadCount atomic.Int64
 	for w := 0; w < workersCount; w++ {
 		g.Go(func() error {
 			for l := range jobs {
 				_, _ = l.DiffID()
 				_, _ = l.Digest()
-				atomic.AddInt64(&bytesReadCount, 2*l.Length())
+				aBytesReadCount.Add(2 * l.Length())
 			}
 			return nil
 		})
@@ -42,7 +43,7 @@ func precompute(ctx context.Context, layers []*filesegment.Layer, workersCount i
 	})
 
 	err = g.Wait()
-	return bytesReadCount, err
+	return aBytesReadCount.Load(), err
 }
 
 func Read(ctx context.Context, dir string, opt ...Option) (*DirImage, error) {

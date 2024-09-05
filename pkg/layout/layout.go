@@ -8,10 +8,9 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/mobileinf/geranos/pkg/dirimage"
+	"github.com/mobileinf/geranos/pkg/duplicator"
 	"github.com/mobileinf/geranos/pkg/filesegment"
 	"runtime"
-
-	"github.com/mobileinf/geranos/pkg/duplicator"
 
 	"github.com/mobileinf/geranos/pkg/sketch"
 	"github.com/mobileinf/geranos/pkg/sparsefile"
@@ -99,7 +98,9 @@ func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) e
 		return err
 	}
 	for _, layer := range manifest.Layers {
-		lm.stats.Add(&Statistics{SourceBytesCount: layer.Size})
+		st := Statistics{}
+		st.SourceBytesCount.Store(layer.Size)
+		lm.stats.Add(&st)
 	}
 
 	bytesClonedCount, matchedSegmentsCount, err := lm.sketcher.Sketch(destinationDir, *manifest)
@@ -107,7 +108,10 @@ func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) e
 		// TODO: ensure we don't delete anything useful _ = os.RemoveAll(destinationDir)
 		return err
 	}
-	lm.stats.Add(&Statistics{BytesClonedCount: bytesClonedCount, MatchedSegmentsCount: matchedSegmentsCount})
+	st := Statistics{}
+	st.BytesClonedCount.Store(bytesClonedCount)
+	st.MatchedSegmentsCount.Store(matchedSegmentsCount)
+	lm.stats.Add(&st)
 
 	convertedImage, err := dirimage.Convert(img)
 	if err != nil {
@@ -117,11 +121,12 @@ func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) e
 	if err != nil {
 		return fmt.Errorf("unable to write dirimage to '%v': %w", destinationDir, err)
 	}
-	lm.stats.Add(&Statistics{
-		BytesWrittenCount: convertedImage.BytesWrittenCount,
-		BytesSkippedCount: convertedImage.BytesSkippedCount,
-		BytesReadCount:    convertedImage.BytesReadCount,
-	})
+
+	st = Statistics{}
+	st.BytesWrittenCount.Store(convertedImage.BytesWrittenCount)
+	st.BytesSkippedCount.Store(convertedImage.BytesSkippedCount)
+	st.BytesReadCount.Store(convertedImage.BytesReadCount)
+	lm.stats.Add(&st)
 	return nil
 }
 
@@ -131,7 +136,9 @@ func (lm *Mapper) Read(ctx context.Context, ref name.Reference) (v1.Image, error
 	if err != nil {
 		return nil, fmt.Errorf("unable to read dirimage: %w", err)
 	}
-	lm.stats.Add(&Statistics{BytesReadCount: img.BytesReadCount})
+	st := Statistics{}
+	st.BytesReadCount.Store(img.BytesReadCount)
+	lm.stats.Add(&st)
 	return img, err
 }
 
@@ -258,6 +265,14 @@ func (lm *Mapper) Remove(src name.Reference) error {
 	return os.RemoveAll(filepath.Join(lm.rootDir, lm.refToDir(ref)))
 }
 
-func (lm *Mapper) Stats() Statistics {
-	return lm.stats
+func (lm *Mapper) Stats() ImmutableStatistics {
+	return ImmutableStatistics{
+		SourceBytesCount:     lm.stats.SourceBytesCount.Load(),
+		BytesWrittenCount:    lm.stats.BytesWrittenCount.Load(),
+		BytesSkippedCount:    lm.stats.BytesSkippedCount.Load(),
+		BytesReadCount:       lm.stats.BytesReadCount.Load(),
+		BytesClonedCount:     lm.stats.BytesClonedCount.Load(),
+		CompressedBytesCount: lm.stats.CompressedBytesCount.Load(),
+		MatchedSegmentsCount: lm.stats.MatchedSegmentsCount.Load(),
+	}
 }

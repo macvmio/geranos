@@ -1,8 +1,60 @@
 package layout
 
-import "sync/atomic"
+import (
+	"fmt"
+	"sync/atomic"
+)
 
 type Statistics struct {
+	SourceBytesCount     atomic.Int64
+	BytesWrittenCount    atomic.Int64
+	BytesSkippedCount    atomic.Int64
+	BytesReadCount       atomic.Int64
+	BytesClonedCount     atomic.Int64
+	CompressedBytesCount atomic.Int64
+	MatchedSegmentsCount atomic.Int64
+}
+
+func (s *Statistics) Add(other *Statistics) {
+	s.BytesWrittenCount.Add(other.BytesWrittenCount.Load())
+	s.BytesSkippedCount.Add(other.BytesSkippedCount.Load())
+	s.BytesReadCount.Add(other.BytesReadCount.Load())
+	s.BytesClonedCount.Add(other.BytesClonedCount.Load())
+	s.CompressedBytesCount.Add(other.CompressedBytesCount.Load())
+	s.MatchedSegmentsCount.Add(other.MatchedSegmentsCount.Load())
+	s.SourceBytesCount.Add(other.SourceBytesCount.Load())
+}
+
+func (s *Statistics) Clear() {
+	s.BytesWrittenCount.Store(0)
+	s.BytesSkippedCount.Store(0)
+	s.BytesReadCount.Store(0)
+	s.BytesClonedCount.Store(0)
+	s.CompressedBytesCount.Store(0)
+	s.MatchedSegmentsCount.Store(0)
+}
+
+// String formats the Statistics struct for human-readable output
+func (s *Statistics) String() string {
+	return fmt.Sprintf("Statistics: \n"+
+		"SourceBytesCount: %d\n"+
+		"BytesWrittenCount: %d\n"+
+		"BytesSkippedCount: %d\n"+
+		"BytesReadCount: %d\n"+
+		"BytesClonedCount: %d\n"+
+		"CompressedBytesCount: %d\n"+
+		"MatchedSegmentsCount: %d\n",
+		s.SourceBytesCount.Load(),
+		s.BytesWrittenCount.Load(),
+		s.BytesSkippedCount.Load(),
+		s.BytesReadCount.Load(),
+		s.BytesClonedCount.Load(),
+		s.CompressedBytesCount.Load(),
+		s.MatchedSegmentsCount.Load())
+}
+
+// ImmutableStatistics holds the immutable copy of statistics
+type ImmutableStatistics struct {
 	SourceBytesCount     int64
 	BytesWrittenCount    int64
 	BytesSkippedCount    int64
@@ -10,23 +62,4 @@ type Statistics struct {
 	BytesClonedCount     int64
 	CompressedBytesCount int64
 	MatchedSegmentsCount int64
-}
-
-func (s *Statistics) Add(other *Statistics) {
-	atomic.AddInt64(&s.BytesWrittenCount, other.BytesWrittenCount)
-	atomic.AddInt64(&s.BytesSkippedCount, other.BytesSkippedCount)
-	atomic.AddInt64(&s.BytesReadCount, other.BytesReadCount)
-	atomic.AddInt64(&s.BytesClonedCount, other.BytesClonedCount)
-	atomic.AddInt64(&s.CompressedBytesCount, other.CompressedBytesCount)
-	atomic.AddInt64(&s.MatchedSegmentsCount, other.MatchedSegmentsCount)
-	atomic.AddInt64(&s.SourceBytesCount, other.SourceBytesCount)
-}
-
-func (s *Statistics) Clear() {
-	atomic.StoreInt64(&s.BytesWrittenCount, 0)
-	atomic.StoreInt64(&s.BytesSkippedCount, 0)
-	atomic.StoreInt64(&s.BytesReadCount, 0)
-	atomic.StoreInt64(&s.BytesClonedCount, 0)
-	atomic.StoreInt64(&s.CompressedBytesCount, 0)
-	atomic.StoreInt64(&s.MatchedSegmentsCount, 0)
 }

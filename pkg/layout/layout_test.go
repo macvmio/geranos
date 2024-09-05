@@ -69,7 +69,7 @@ func TestLayoutMapper_Read_VariousChunkSizes(t *testing.T) {
 		}
 	}
 	st := lmDst.Stats()
-	fmt.Printf("%#v\n", st)
+	fmt.Printf("%+v\n", st)
 	if st.BytesWrittenCount != 102 {
 		t.Fatalf("unexpected number of bytes written: expected %d got %d", 918, st.BytesWrittenCount)
 	}
@@ -178,8 +178,8 @@ func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 	img1, err := lm.Read(ctx, srcRef)
 	require.NoErrorf(t, err, "unable to read disk image: %v", err)
 
-	if lm.stats.BytesReadCount != 2000 { // we read each byte twice to calculate diffID and digest
-		t.Fatalf("unexpected number of bytes read: expected %v, got %v", 2000, lm.stats.BytesReadCount)
+	if lm.stats.BytesReadCount.Load() != 2000 { // we read each byte twice to calculate diffID and digest
+		t.Fatalf("unexpected number of bytes read: expected %v, got %v", 2000, lm.stats.BytesReadCount.Load())
 	}
 
 	destRef, err := name.ParseReference("oci.jarosik.online/testrepo/a:v2")
@@ -188,7 +188,7 @@ func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 	err = lm.Write(ctx, img1, destRef)
 	require.NoErrorf(t, err, "unable to write image %v: %v", destRef, err)
 
-	assert.Equal(t, int64(1000), lm.stats.BytesWrittenCount)
+	assert.Equal(t, int64(1000), lm.stats.BytesWrittenCount.Load())
 	lm.stats.Clear()
 
 	destRef3, err := name.ParseReference("oci.jarosik.online/testrepo/a:v3")
@@ -196,10 +196,10 @@ func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 
 	err = lm.Write(ctx, img1, destRef3)
 	require.NoErrorf(t, err, "unable to write image %v: %v", destRef, err)
-	assert.Equal(t, int64(0), lm.stats.BytesWrittenCount)
-	assert.Equal(t, int64(1000), lm.stats.BytesReadCount)
-	assert.Equal(t, int64(1000), lm.stats.BytesClonedCount)
-	assert.Equal(t, int64(100), lm.stats.MatchedSegmentsCount)
+	assert.Equal(t, int64(0), lm.stats.BytesWrittenCount.Load())
+	assert.Equal(t, int64(1000), lm.stats.BytesReadCount.Load())
+	assert.Equal(t, int64(1000), lm.stats.BytesClonedCount.Load())
+	assert.Equal(t, int64(100), lm.stats.MatchedSegmentsCount.Load())
 
 	afterHash := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v3/disk.img"))
 	assert.Equal(t, beforeHash, afterHash)
@@ -224,8 +224,8 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 	img1, err := lm.Read(ctx, srcRef)
 	require.NoErrorf(t, err, "unable to read disk image: %v", err)
 
-	if lm.stats.BytesReadCount != 2000 { // we read each byte twice to calculate diffID and digest
-		t.Fatalf("unexpected number of bytes read: expected %v, got %v", 2000, lm.stats.BytesReadCount)
+	if lm.stats.BytesReadCount.Load() != 2000 { // we read each byte twice to calculate diffID and digest
+		t.Fatalf("unexpected number of bytes read: expected %v, got %v", 2000, lm.stats.BytesReadCount.Load())
 	}
 
 	destRef, err := name.ParseReference("oci.jarosik.online/testrepo/a:v2")
@@ -234,7 +234,7 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 	err = lm.Write(ctx, img1, destRef)
 	require.NoErrorf(t, err, "unable to write image %v: %v", destRef, err)
 
-	assert.Equal(t, int64(1000), lm.stats.BytesWrittenCount)
+	assert.Equal(t, int64(1000), lm.stats.BytesWrittenCount.Load())
 	lm.stats.Clear()
 
 	// Here "testrepo/a:v2" contains .oci.manifest.json, and is the same as generated file
@@ -260,10 +260,10 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 	require.NoErrorf(t, err, "unable to parse reference %v: %v", destRef, err)
 	err = lm.Write(ctx, img3, destRef)
 	require.NoErrorf(t, err, "unable to write image %v: %v", destRef, err)
-	assert.Equal(t, int64(20), lm.stats.BytesWrittenCount)
-	assert.Equal(t, int64(1020), lm.stats.BytesReadCount)
-	assert.Equal(t, int64(1020), lm.stats.BytesClonedCount)
-	assert.Equal(t, int64(100), lm.stats.MatchedSegmentsCount)
+	assert.Equal(t, int64(20), lm.stats.BytesWrittenCount.Load())
+	assert.Equal(t, int64(1020), lm.stats.BytesReadCount.Load())
+	assert.Equal(t, int64(1020), lm.stats.BytesClonedCount.Load())
+	assert.Equal(t, int64(100), lm.stats.MatchedSegmentsCount.Load())
 }
 
 func TestLayoutMapper_Write_MultipleConcurrentWorkers(t *testing.T) {
