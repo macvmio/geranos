@@ -1,5 +1,7 @@
 # Geranos
 
+[![Build Status](https://github.com/mobileinf/geranos/actions/workflows/main.yml/badge.svg)](https://github.com/mobileinf/geranos/actions/workflows/main.yml)
+
 In a world where data is as vast as oceans, and speed is the essence of success,
 there emerges a champion for efficiency and innovation: **Geranos**.
 Powered by the robust `go-containerregistry` library,
