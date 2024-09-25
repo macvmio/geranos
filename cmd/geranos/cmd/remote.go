@@ -5,18 +5,19 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/mobileinf/geranos/pkg/transporter"
 	"github.com/spf13/cobra"
 )
 
 func NewCommandRemoteRepos() *cobra.Command {
 
 	var remoteReposCmd = &cobra.Command{
-		Use:   "remote",
-		Short: "Manipulate remote repositories",
-		Long:  `Manipulate remote repositories`,
-		Args:  cobra.ExactArgs(0),
+		Use:       "remote",
+		Short:     "Manipulate remote repositories",
+		Long:      `Manipulate remote repositories`,
+		ValidArgs: []string{"catalog", "images", "tag"},
+		Args:      cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 		Run: func(cmd *cobra.Command, args []string) {
-
 		},
 	}
 
@@ -64,7 +65,21 @@ func NewCommandRemoteRepos() *cobra.Command {
 		},
 	}
 
+	var tagImage = &cobra.Command{
+		Use:   "tag <srcRef> <dstRef>",
+		Short: "Tag remotely src tag as dst tag",
+		Long:  `This is operation on remote: source tag will be retagged as destination tag`,
+		Args:  cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			err := transporter.RetagRemotely(args[0], args[1])
+			if err != nil {
+				fmt.Printf("Unable to retag '%s' to '%s': %v\n", args[0], args[1], err)
+			}
+		},
+	}
+
 	remoteReposCmd.AddCommand(catalogCmd)
 	remoteReposCmd.AddCommand(listImages)
+	remoteReposCmd.AddCommand(tagImage)
 	return remoteReposCmd
 }
