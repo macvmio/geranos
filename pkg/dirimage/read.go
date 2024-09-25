@@ -111,3 +111,11 @@ func Read(ctx context.Context, dir string, opt ...Option) (*DirImage, error) {
 		// TODO: Descriptors
 	}, nil
 }
+
+func ReadManifest(dir string) (*v1.Manifest, error) {
+	file, err := os.Open(filepath.Join(dir, LocalManifestFilename))
+	if err != nil {
+		return nil, fmt.Errorf("unable to open manifest file: %w", err)
+	}
+	return v1.ParseManifest(file)
+}

@@ -16,6 +16,7 @@ type options struct {
 	refValidation    name.Option
 	workersCount     int
 	verbose          bool
+	force            bool
 	ctx              context.Context
 }
 
@@ -61,6 +62,12 @@ func WithContext(ctx context.Context) Option {
 func WithVerbose(verbose bool) Option {
 	return func(o *options) {
 		o.verbose = verbose
+	}
+}
+
+func WithForce(force bool) Option {
+	return func(o *options) {
+		o.force = force
 	}
 }
 

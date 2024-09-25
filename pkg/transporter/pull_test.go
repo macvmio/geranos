@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -141,4 +142,86 @@ func TestPullAndPush_pullSmallerImageAfterPullingLargerImage(t *testing.T) {
 
 	assert.Equal(t, hash1, hash1After)
 	assert.Equal(t, hash2, hash2After)
+}
+
+func TestPullAndPush_pullSameTagThatWasUpdatedOnRemote(t *testing.T) {
+	recordedRequests := make([]http.Request, 0)
+	s := httptest.NewServer(prepareRegistryWithRecorder(&recordedRequests))
+	defer s.Close()
+
+	tempDir, opts := optionsForTesting(t)
+
+	tagsCount := 3
+	hashesBefore := make([]string, tagsCount)
+	for i := 0; i < tagsCount; i++ {
+		ref1 := refOnServer(s.URL, "test-vm:v"+strconv.Itoa(i))
+		hashesBefore[i] = makeTestVMWithContent(t, tempDir, ref1, "testvm:v"+strconv.Itoa(i))
+		err := Push(ref1, opts...)
+		assert.NoError(t, err)
+		deleteTestVMAt(t, tempDir, ref1)
+	}
+	hashesAfter := make([]string, tagsCount)
+	for i := 0; i < tagsCount; i++ {
+		err := RetagRemotely(refOnServer(s.URL, "test-vm:v"+strconv.Itoa(i)), refOnServer(s.URL, "test-vm:latest"), opts...)
+		require.NoError(t, err)
+
+		latestRef := refOnServer(s.URL, "test-vm:latest")
+		err = Pull(latestRef, opts...)
+		require.NoError(t, err)
+
+		hashesAfter[i] = hashFromFile(t, filepath.Join(tempDir, "images", latestRef, "disk.img"))
+	}
+	for i := 0; i < tagsCount; i++ {
+		assert.Equal(t, hashesBefore[i], hashesAfter[i])
+	}
+}
+
+func TestPull_WithForceOption(t *testing.T) {
+	recordedRequests := make([]http.Request, 0)
+	s := httptest.NewServer(prepareRegistryWithRecorder(&recordedRequests))
+	defer s.Close()
+
+	tempDir, opts := optionsForTesting(t)
+
+	ref := refOnServer(s.URL, "test-vm:1.0")
+	shaBefore := makeTestVMAt(t, tempDir, ref)
+
+	// First, push the image to ensure it exists in the registry
+	err := Push(ref, opts...)
+	require.NoError(t, err)
+
+	clear(recordedRequests)
+	deleteTestVMAt(t, tempDir, ref)
+	// Case 1: Pull with force = true, should overwrite the existing image
+	t.Run("with force", func(t *testing.T) {
+		forcedOpts := append(opts, WithForce(true))
+
+		// Call Pull with force option enabled
+		err := Pull(ref, forcedOpts...)
+		require.NoError(t, err)
+
+		// Verify that the image was written even though it already exists (Check by checking the number of requests)
+		assert.Equal(t, 2, calculateAccessed(recordedRequests, "GET", "/blobs"))
+		shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", ref, "disk.img"))
+		assert.Equal(t, shaBefore, shaAfter)
+	})
+
+	// Case 2: Pull with force = false, should only write if the image is different (no overwrite)
+	t.Run("without force (default)", func(t *testing.T) {
+		// Reset force to false
+		err := Pull(ref, opts...)
+		require.NoError(t, err)
+		clear(recordedRequests)
+
+		nonForcedOpts := append(opts, WithForce(false))
+
+		// Pull the same image again without force
+		err = Pull(ref, nonForcedOpts...)
+		require.NoError(t, err)
+
+		// Ensure no blobs were downloaded since the image already exists
+		assert.Equal(t, 0, calculateAccessed(recordedRequests, "GET", "/blobs"))
+		shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", ref, "disk.img"))
+		assert.Equal(t, shaBefore, shaAfter)
+	})
 }

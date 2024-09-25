@@ -150,12 +150,16 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 		return err
 	}
 
-	rawManifest, err := di.Image.RawManifest()
+	err = truncateFiles(destinationDir, di.segmentDescriptors)
 	if err != nil {
 		return err
 	}
 
-	err = truncateFiles(destinationDir, di.segmentDescriptors)
+	return di.WriteManifest(destinationDir)
+}
+
+func (di *DirImage) WriteManifest(destinationDir string) error {
+	rawManifest, err := di.Image.RawManifest()
 	if err != nil {
 		return err
 	}

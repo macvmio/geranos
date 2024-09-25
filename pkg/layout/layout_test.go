@@ -369,3 +369,77 @@ func TestLayoutMapper_ContainsAny(t *testing.T) {
 		assert.False(t, exists)
 	})
 }
+
+func TestLayoutMapper_WriteConditionally(t *testing.T) {
+	ctx := context.Background()
+	tempDir, err := os.MkdirTemp("", "layout-mapper-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	testRepoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
+	err = os.MkdirAll(path.Join(testRepoDir, "a:v1-origin"), os.ModePerm)
+	require.NoErrorf(t, err, "unable to create directory: %v", err)
+
+	randomFileName := path.Join(testRepoDir, "a:v1-origin/disk.img")
+	err = generateRandomFile(randomFileName, 123)
+	require.NoErrorf(t, err, "unable to generate file: %v", err)
+	//hashBefore := hashFromFile(t, randomFileName)
+	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1-origin"))
+	require.NoErrorf(t, err, "unable to parse reference: %v", err)
+	originImg, err := NewMapper(tempDir).Read(ctx, srcRef)
+
+	// Case 1: Manifests are the same (should not trigger write)
+	t.Run("Manifests are the same", func(t *testing.T) {
+		// Write the image initially to ensure a local manifest exists
+		dstRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v2"))
+		require.NoError(t, err)
+		lm := NewMapper(tempDir)
+		err = lm.Write(ctx, originImg, dstRef)
+		require.NoError(t, err)
+
+		// Call WriteConditionally, should skip writing
+		lm2 := NewMapper(tempDir)
+		err = lm2.WriteConditionally(ctx, originImg, dstRef)
+		require.NoError(t, err)
+
+		// Assert that no additional writes occurred (you can check stats or logs)
+		assert.Equal(t, int64(123), lm.stats.BytesWrittenCount.Load(), "Expected writes with Write method")
+		assert.Equal(t, int64(0), lm2.stats.BytesWrittenCount.Load(), "Expected no additional writes")
+	})
+
+	// Case 2: Manifests are different (should trigger write)
+	t.Run("Manifests are different", func(t *testing.T) {
+		dstRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v3"))
+		require.NoError(t, err)
+		lm := NewMapper(tempDir)
+		err = lm.Write(ctx, originImg, dstRef)
+		require.NoError(t, err)
+
+		// Modify the image to create a new manifest
+		err = generateRandomFile(randomFileName, 123)
+		require.NoErrorf(t, err, "unable to generate file: %v", err)
+		updateImage, err := lm.Read(ctx, srcRef)
+
+		// Call WriteConditionally, should perform the write since manifests are different
+		lm2 := NewMapper(tempDir)
+		err = lm2.WriteConditionally(ctx, updateImage, dstRef)
+		require.NoError(t, err)
+
+		// Assert that the image was written to disk
+		assert.Equal(t, int64(123), lm2.stats.BytesWrittenCount.Load(), "Expected image write to occur")
+	})
+
+	// Case 3: Local manifest does not exist (should trigger write)
+	t.Run("Local manifest is missing", func(t *testing.T) {
+		dstRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v5"))
+
+		// Call WriteConditionally, should perform the write since manifests are different
+		lm2 := NewMapper(tempDir)
+		err = lm2.WriteConditionally(ctx, originImg, dstRef)
+		require.NoError(t, err)
+
+		// Assert that the image was written to disk
+		assert.Equal(t, int64(0), lm2.stats.BytesWrittenCount.Load())
+		assert.Equal(t, int64(123), lm2.stats.BytesClonedCount.Load())
+	})
+}

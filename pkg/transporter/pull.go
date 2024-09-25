@@ -54,5 +54,8 @@ func Pull(src string, opt ...Option) error {
 
 	lm := layout.NewMapper(opts.imagesPath, dirimageOptions...)
 	go printProgress(progress)
-	return lm.Write(opts.ctx, img, ref)
+	if opts.force {
+		return lm.Write(opts.ctx, img, ref)
+	}
+	return lm.WriteConditionally(opts.ctx, img, ref)
 }

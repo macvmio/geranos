@@ -10,6 +10,7 @@ import (
 	"github.com/mobileinf/geranos/pkg/dirimage"
 	"github.com/mobileinf/geranos/pkg/duplicator"
 	"github.com/mobileinf/geranos/pkg/filesegment"
+	"reflect"
 	"runtime"
 
 	"github.com/mobileinf/geranos/pkg/sketch"
@@ -86,17 +87,33 @@ func (lm *Mapper) writeLayer(destinationDir string, segment *filesegment.Descrip
 	return lm.writeToSegment(destinationDir, segment, rc)
 }
 
+func (lm *Mapper) WriteConditionally(ctx context.Context, img v1.Image, ref name.Reference) error {
+	originManifest, err := img.Manifest()
+	if err != nil {
+		return fmt.Errorf("failed to read origin manifest: %w", err)
+	}
+	localManifest, err := dirimage.ReadManifest(lm.refToDir(ref))
+	if err == nil && reflect.DeepEqual(originManifest, localManifest) {
+		fmt.Println("skipped writing because manifests are the same")
+		return nil
+	}
+	return lm.Write(ctx, img, ref)
+}
+
 func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) error {
+	if img == nil {
+		return errors.New("nil image provided")
+	}
 	destinationDir := lm.refToDir(ref)
 	err := os.MkdirAll(destinationDir, 0o777)
 	if err != nil {
 		return fmt.Errorf("unable to create directory for writing: %w", err)
 	}
-
 	manifest, err := img.Manifest()
 	if err != nil {
 		return err
 	}
+
 	for _, layer := range manifest.Layers {
 		st := Statistics{}
 		st.SourceBytesCount.Store(layer.Size)
@@ -184,9 +201,10 @@ func (lm *Mapper) Adopt(src string, ref name.Reference, failIfContainsSubdirecto
 }
 
 type Properties struct {
-	Ref       name.Reference
-	DiskUsage string
-	Size      int64
+	Ref         name.Reference
+	DiskUsage   string
+	Size        int64
+	HasManifest bool
 }
 
 func directorySize(path string) (int64, error) {
@@ -204,7 +222,8 @@ func directorySize(path string) (int64, error) {
 }
 
 func (lm *Mapper) ContainsManifest(ref name.Reference) bool {
-	return true
+	_, err := dirimage.ReadManifest(lm.refToDir(ref))
+	return err == nil
 }
 
 // ContainsAny returns true if there is a directory corresponding to the provided reference
@@ -244,9 +263,10 @@ func (lm *Mapper) List() ([]Properties, error) {
 			return err
 		}
 		res = append(res, Properties{
-			Ref:       ref,
-			DiskUsage: diskUsage,
-			Size:      dirSize,
+			Ref:         ref,
+			DiskUsage:   diskUsage,
+			Size:        dirSize,
+			HasManifest: lm.ContainsManifest(ref),
 		})
 		return nil
 	})

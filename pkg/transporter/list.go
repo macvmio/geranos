@@ -13,11 +13,16 @@ func List(opt ...Option) error {
 		return fmt.Errorf("unable to list images: %w", err)
 	}
 	// Print header
-	fmt.Printf("%-50s %-15s %-15s %-10s\n", "REPOSITORY", "TAG", "SIZE", "DISK USAGE")
+	fmt.Printf("%-50s %-15s %-15s %-12s %-10s\n", "REPOSITORY", "TAG", "SIZE", "DISK USAGE", "MANIFEST")
 
 	for _, p := range props {
-		fmt.Printf("%-50s %-15s %-15s %-10s\n", p.Ref.Context(), p.Ref.Identifier(),
-			fmt.Sprintf("%d", p.Size), p.DiskUsage)
+		manifestStatus := "Missing"
+		if p.HasManifest {
+			manifestStatus = "Present"
+		}
+
+		fmt.Printf("%-50s %-15s %-15s %-12s %-10s\n", p.Ref.Context(), p.Ref.Identifier(),
+			fmt.Sprintf("%d", p.Size), p.DiskUsage, manifestStatus)
 	}
 	return nil
 }
