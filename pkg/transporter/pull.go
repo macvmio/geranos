@@ -57,5 +57,5 @@ func Pull(src string, opt ...Option) error {
 	if opts.force {
 		return lm.Write(opts.ctx, img, ref)
 	}
-	return lm.WriteConditionally(opts.ctx, img, ref)
+	return lm.WriteIfNotPresent(opts.ctx, img, ref)
 }

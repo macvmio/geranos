@@ -87,7 +87,7 @@ func (lm *Mapper) writeLayer(destinationDir string, segment *filesegment.Descrip
 	return lm.writeToSegment(destinationDir, segment, rc)
 }
 
-func (lm *Mapper) WriteConditionally(ctx context.Context, img v1.Image, ref name.Reference) error {
+func (lm *Mapper) WriteIfNotPresent(ctx context.Context, img v1.Image, ref name.Reference) error {
 	originManifest, err := img.Manifest()
 	if err != nil {
 		return fmt.Errorf("failed to read origin manifest: %w", err)
@@ -109,6 +109,7 @@ func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) e
 	if err != nil {
 		return fmt.Errorf("unable to create directory for writing: %w", err)
 	}
+
 	manifest, err := img.Manifest()
 	if err != nil {
 		return err

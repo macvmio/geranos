@@ -17,9 +17,9 @@ type DirImage struct {
 
 var _ v1.Image = (*DirImage)(nil)
 
-func (d *DirImage) Length() int64 {
+func (di *DirImage) Length() int64 {
 	res := int64(0)
-	for _, d := range d.segmentDescriptors {
+	for _, d := range di.segmentDescriptors {
 		res += d.Length()
 	}
 	return res

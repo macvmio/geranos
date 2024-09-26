@@ -370,7 +370,7 @@ func TestLayoutMapper_ContainsAny(t *testing.T) {
 	})
 }
 
-func TestLayoutMapper_WriteConditionally(t *testing.T) {
+func TestLayoutMapper_WriteIfNotPresent(t *testing.T) {
 	ctx := context.Background()
 	tempDir, err := os.MkdirTemp("", "layout-mapper-*")
 	require.NoError(t, err)
@@ -397,9 +397,9 @@ func TestLayoutMapper_WriteConditionally(t *testing.T) {
 		err = lm.Write(ctx, originImg, dstRef)
 		require.NoError(t, err)
 
-		// Call WriteConditionally, should skip writing
+		// Call WriteIfNotPresent, should skip writing
 		lm2 := NewMapper(tempDir)
-		err = lm2.WriteConditionally(ctx, originImg, dstRef)
+		err = lm2.WriteIfNotPresent(ctx, originImg, dstRef)
 		require.NoError(t, err)
 
 		// Assert that no additional writes occurred (you can check stats or logs)
@@ -420,9 +420,9 @@ func TestLayoutMapper_WriteConditionally(t *testing.T) {
 		require.NoErrorf(t, err, "unable to generate file: %v", err)
 		updateImage, err := lm.Read(ctx, srcRef)
 
-		// Call WriteConditionally, should perform the write since manifests are different
+		// Call WriteIfNotPresent, should perform the write since manifests are different
 		lm2 := NewMapper(tempDir)
-		err = lm2.WriteConditionally(ctx, updateImage, dstRef)
+		err = lm2.WriteIfNotPresent(ctx, updateImage, dstRef)
 		require.NoError(t, err)
 
 		// Assert that the image was written to disk
@@ -433,9 +433,9 @@ func TestLayoutMapper_WriteConditionally(t *testing.T) {
 	t.Run("Local manifest is missing", func(t *testing.T) {
 		dstRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v5"))
 
-		// Call WriteConditionally, should perform the write since manifests are different
+		// Call WriteIfNotPresent, should perform the write since manifests are different
 		lm2 := NewMapper(tempDir)
-		err = lm2.WriteConditionally(ctx, originImg, dstRef)
+		err = lm2.WriteIfNotPresent(ctx, originImg, dstRef)
 		require.NoError(t, err)
 
 		// Assert that the image was written to disk
