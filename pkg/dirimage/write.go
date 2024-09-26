@@ -86,6 +86,9 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 	if di.Image == nil {
 		return errors.New("invalid image")
 	}
+	if err := di.DeleteManifest(destinationDir); err != nil {
+		return fmt.Errorf("failed to delete manifest: %w", err)
+	}
 	opts := makeOptions(opt...)
 
 	type Job struct {
@@ -165,4 +168,18 @@ func (di *DirImage) WriteManifest(destinationDir string) error {
 	}
 
 	return os.WriteFile(filepath.Join(destinationDir, LocalManifestFilename), rawManifest, 0o777)
+}
+
+func (di *DirImage) DeleteManifest(destinationDir string) error {
+	manifestPath := filepath.Join(destinationDir, LocalManifestFilename)
+
+	err := os.Remove(manifestPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	return nil
 }

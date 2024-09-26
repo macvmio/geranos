@@ -1,5 +1,11 @@
 package dirimage
 
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
 /*
 func TestWrite_ContextCancelledDuringWork(t *testing.T) {
 
@@ -38,3 +44,47 @@ func TestWrite_ContextCancelledDuringWork(t *testing.T) {
 	}
 }
 */
+
+func TestDirImage_DeleteManifest(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "test-delete-manifest")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir) // Cleanup after the test
+
+	di := &DirImage{}
+
+	t.Run("FileExists", func(t *testing.T) {
+		// Create the manifest file inside the temporary directory
+		manifestPath := filepath.Join(tempDir, LocalManifestFilename)
+		if err := os.WriteFile(manifestPath, []byte(`{}`), 0644); err != nil {
+			t.Fatalf("Failed to create manifest file: %v", err)
+		}
+
+		// Call the DeleteManifest function
+		err := di.DeleteManifest(tempDir)
+		if err != nil {
+			t.Fatalf("Expected no error, but got: %v", err)
+		}
+
+		// Check if the file is deleted
+		if _, err := os.Stat(manifestPath); !os.IsNotExist(err) {
+			t.Fatalf("Expected file to be deleted, but it still exists")
+		}
+	})
+
+	t.Run("FileDoesNotExist", func(t *testing.T) {
+		// Ensure the manifest file does not exist
+		manifestPath := filepath.Join(tempDir, LocalManifestFilename)
+		if err := os.Remove(manifestPath); !os.IsNotExist(err) && err != nil {
+			t.Fatalf("Failed to remove manifest file in setup: %v", err)
+		}
+
+		// Call the DeleteManifest function
+		err := di.DeleteManifest(tempDir)
+		if err != nil {
+			t.Fatalf("Expected no error when file does not exist, but got: %v", err)
+		}
+	})
+}
