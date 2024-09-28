@@ -283,7 +283,7 @@ func (lm *Mapper) Remove(src name.Reference) error {
 	if err != nil {
 		return fmt.Errorf("unable to valid reference: %w", err)
 	}
-	return os.RemoveAll(filepath.Join(lm.rootDir, lm.refToDir(ref)))
+	return os.RemoveAll(lm.refToDir(ref))
 }
 
 func (lm *Mapper) Stats() ImmutableStatistics {

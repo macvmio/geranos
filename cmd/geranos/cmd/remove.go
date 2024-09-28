@@ -13,11 +13,10 @@ func NewCmdRemove() *cobra.Command {
 		Long:  ``,
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			src := args[0]
+			src := TheAppConfig.Override(args[0])
 			opts := []transporter.Option{
 				transporter.WithImagesPath(TheAppConfig.ImagesDirectory),
 			}
-			// TODO(tjarosik): Override command using TheAppConfig current contexts if present
 			err := transporter.Remove(src, opts...)
 			if err != nil {
 				fmt.Printf("unable to remove: %v\n", err)
