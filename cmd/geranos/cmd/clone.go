@@ -4,25 +4,19 @@ import (
 	"fmt"
 	"github.com/mobileinf/geranos/pkg/transporter"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func NewCmdClone() *cobra.Command {
 	var cloneCmd = &cobra.Command{
 		Use:   "clone [src ref] [dst ref]",
-		Short: "Clone one reference to other name",
+		Short: "Locally clone one reference to other name",
 		Long:  ``,
 		Args:  cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
-			imagesDir := viper.GetString("images_directory")
-			if len(imagesDir) == 0 {
-				fmt.Println("undefined image directory")
-				return
-			}
-			src := args[0]
-			dst := args[1]
+			src := TheAppConfig.Override(args[0])
+			dst := TheAppConfig.Override(args[1])
 			opts := []transporter.Option{
-				transporter.WithImagesPath(imagesDir),
+				transporter.WithImagesPath(TheAppConfig.ImagesDirectory),
 			}
 			err := transporter.Clone(src, dst, opts...)
 			if err != nil {

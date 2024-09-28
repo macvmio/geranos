@@ -1,26 +1,23 @@
 package cmd
 
 import (
-	"errors"
 	"github.com/mobileinf/geranos/pkg/transporter"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func NewCmdAdopt() *cobra.Command {
 	var adoptCommand = &cobra.Command{
 		Use:   "adopt [dir name] [image name]",
-		Short: "Adopt directory under provided reference, which can be later used for other commands",
-		Args:  cobra.ExactArgs(2),
+		Short: "Adopt a directory as an image under current local registry",
+		Long: "Provided directory can be anywhere on your disk. It will be adopted as provided reference under current local registry." +
+			"This will ensure that later it is available for use with other commands",
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			imagesDir := viper.GetString("images_directory")
-			if len(imagesDir) == 0 {
-				return errors.New("undefined image directory")
-			}
 			src := args[0]
-			ref := args[1]
+			ref := TheAppConfig.Override(args[1])
+
 			opts := []transporter.Option{
-				transporter.WithImagesPath(imagesDir),
+				transporter.WithImagesPath(TheAppConfig.ImagesDirectory),
 			}
 			return transporter.Adopt(src, ref, opts...)
 		},

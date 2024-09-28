@@ -11,7 +11,6 @@ import (
 )
 
 func InitializeCommands() *cobra.Command {
-	cobra.OnInitialize(initConfig)
 	var rootCmd = &cobra.Command{
 		Use:   "geranos",
 		Short: "Geranos is a tool to transport big files as OCI images.",
@@ -21,6 +20,12 @@ It relies on sparse files and Copy-on-Write filesystem features to optimize disk
 		// This function can be used to execute any code when the root command is called without any subcommands
 		Args:                       cobra.ExactArgs(1),
 		SuggestionsMinimumDistance: 2,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if err := initConfig(); err != nil {
+				return fmt.Errorf("failed to initialize config: %v", err)
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println(cmd.Short)
 			return nil
@@ -38,14 +43,15 @@ It relies on sparse files and Copy-on-Write filesystem features to optimize disk
 		NewCmdPull(),
 		NewCmdPush(),
 		NewCmdInspect(),
-		NewListCommand(),
+		NewCmdList(),
 		NewCmdAdopt(),
 		NewCmdClone(),
 		NewCmdRemove(),
 		NewCmdAuthLogin(),
 		NewCmdAuthLogout(),
 		NewCmdVersion(),
-		NewCommandRemoteRepos(),
+		NewCmdRemoteRepos(),
+		NewCmdContext(),
 	)
 
 	return rootCmd

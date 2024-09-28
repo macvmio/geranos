@@ -2,13 +2,16 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/mobileinf/geranos/pkg/appconfig"
 	"github.com/spf13/viper"
 )
 
 var flagConfigFile string
 var flagLocalDebug bool
 
-func initConfig() {
+var TheAppConfig appconfig.Config
+
+func initConfig() error {
 	if flagConfigFile != "" {
 		viper.SetConfigFile(flagConfigFile)
 	} else {
@@ -24,8 +27,11 @@ func initConfig() {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
 		fmt.Println(viper.AllSettings())
 	}
-	err := viper.ReadInConfig()
-	if err != nil {
-		fmt.Printf("error reading viper config '%v': %v", viper.ConfigFileUsed(), err)
+	if err := viper.ReadInConfig(); err != nil {
+		return fmt.Errorf("error reading viper config '%v': %w", viper.ConfigFileUsed(), err)
 	}
+	if err := viper.Unmarshal(&TheAppConfig); err != nil {
+		return fmt.Errorf("error unmarshalling viper config '%v': %w", viper.ConfigFileUsed(), err)
+	}
+	return nil
 }

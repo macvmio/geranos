@@ -5,7 +5,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/mobileinf/geranos/pkg/transporter"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func NewCmdPush() *cobra.Command {
@@ -20,15 +19,9 @@ func NewCmdPush() *cobra.Command {
 		Long:  `Uploads a specified file from the local system and packages it as an OCI image to be pushed to a specified container registry.`,
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			imagesDir := viper.GetString("images_directory")
-			if len(imagesDir) == 0 {
-				fmt.Printf("undefined image directory")
-				return
-			}
-
-			src := args[0]
+			src := TheAppConfig.Override(args[0])
 			opts := []transporter.Option{
-				transporter.WithImagesPath(imagesDir),
+				transporter.WithImagesPath(TheAppConfig.ImagesDirectory),
 				transporter.WithContext(cmd.Context()),
 				transporter.WithWorkersCount(flagConcurrentWorkers),
 			}

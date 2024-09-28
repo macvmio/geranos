@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"github.com/mobileinf/geranos/pkg/transporter"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -14,13 +13,9 @@ func NewCmdPull() *cobra.Command {
 		Long:  `Downloads an OCI image from a specified container registry and extracts the file to a specified local path.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			imagesDir := viper.GetString("images_directory")
-			if len(imagesDir) == 0 {
-				return errors.New("undefined image directory")
-			}
-			src := args[0]
+			src := TheAppConfig.Override(args[0])
 			opts := []transporter.Option{
-				transporter.WithImagesPath(imagesDir),
+				transporter.WithImagesPath(TheAppConfig.ImagesDirectory),
 				transporter.WithContext(cmd.Context()),
 				transporter.WithVerbose(viper.GetBool("verbose")),
 			}

@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewCommandRemoteRepos() *cobra.Command {
+func NewCmdRemoteRepos() *cobra.Command {
 
 	var remoteReposCmd = &cobra.Command{
 		Use:       "remote",
@@ -25,8 +25,11 @@ func NewCommandRemoteRepos() *cobra.Command {
 		Use:   "catalog [remote name]",
 		Short: "List remote repositories",
 		Long:  `List remote repositories`,
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) == 0 {
+				args = append(args, TheAppConfig.CurrentRegistry())
+			}
 			reg, err := name.NewRegistry(args[0])
 			if err != nil {
 				fmt.Println("Error parsing registry name:", err)
@@ -49,6 +52,7 @@ func NewCommandRemoteRepos() *cobra.Command {
 		Long:  `List remote images in a remote repository`,
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			args[0] = TheAppConfig.Override(args[0])
 			repo, err := name.NewRepository(args[0])
 			if err != nil {
 				fmt.Println("Error parsing registry name:", err)
@@ -71,6 +75,8 @@ func NewCommandRemoteRepos() *cobra.Command {
 		Long:  `This is operation on remote: source tag will be retagged as destination tag`,
 		Args:  cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
+			args[0] = TheAppConfig.Override(args[0])
+			args[1] = TheAppConfig.Override(args[1])
 			err := transporter.RetagRemotely(args[0], args[1])
 			if err != nil {
 				fmt.Printf("Unable to retag '%s' to '%s': %v\n", args[0], args[1], err)
