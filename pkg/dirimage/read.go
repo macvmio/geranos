@@ -2,6 +2,8 @@ package dirimage
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
@@ -117,5 +119,23 @@ func ReadManifest(dir string) (*v1.Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to open manifest file: %w", err)
 	}
+	defer file.Close()
 	return v1.ParseManifest(file)
+}
+
+// ReadDigest reads the digest from the manifest in the specified directory.
+func ReadDigest(dir string) (v1.Hash, error) {
+	// Use ReadManifest to get the manifest
+	manifest, err := ReadManifest(dir)
+	if err != nil {
+		return v1.Hash{}, fmt.Errorf("unable to read manifest: %w", err)
+	}
+
+	// Serialize the manifest to JSON
+	jsonData, err := json.Marshal(manifest)
+	if err != nil {
+		return v1.Hash{}, fmt.Errorf("failed to marshal manifest to JSON: %w", err)
+	}
+	hash := sha256.Sum256(jsonData)
+	return v1.NewHash(string(hash[:]))
 }

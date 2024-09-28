@@ -297,3 +297,11 @@ func (lm *Mapper) Stats() ImmutableStatistics {
 		MatchedSegmentsCount: lm.stats.MatchedSegmentsCount.Load(),
 	}
 }
+
+func (lm *Mapper) ReadManifest(ref name.Reference) (*v1.Manifest, error) {
+	return dirimage.ReadManifest(lm.refToDir(ref))
+}
+
+func (lm *Mapper) ReadDigest(ref name.Reference) (v1.Hash, error) {
+	return dirimage.ReadDigest(lm.refToDir(ref))
+}
