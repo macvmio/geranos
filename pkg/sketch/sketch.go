@@ -19,8 +19,13 @@ type Sketcher struct {
 }
 
 type cloneCandidate struct {
-	descriptors []v1.Descriptor
+	descriptors []filesegment.Descriptor
 	dirPath     string
+	filename    string
+}
+
+func (cc *cloneCandidate) FilePath() string {
+	return filepath.Join(cc.dirPath, cc.filename)
 }
 
 func resizeFile(filePath string, newSize int64) error {
@@ -38,6 +43,43 @@ func resizeFile(filePath string, newSize int64) error {
 	}
 
 	return nil
+}
+
+// fileExists checks if a file exists and is not a directory
+func fileExists(filePath string) bool {
+	info, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
+}
+
+func (sc *Sketcher) findBestCloneCandidate(fileBlueprints []*fileBlueprint, cloneCandidates []*cloneCandidate) (*cloneCandidate, error) {
+	var bestCloneCandidate *cloneCandidate
+	bestScore := 0
+
+	for _, fr := range fileBlueprints {
+		// Create a map of digest segments for each file blueprint
+		segmentsDigestMap := make(map[string]filesegment.Descriptor)
+		for _, seg := range fr.Segments {
+			segmentsDigestMap[seg.Digest().String()] = *seg
+		}
+
+		// Find the best matching candidate
+		for _, cc := range cloneCandidates {
+			score := sc.computeScore(segmentsDigestMap, cc)
+			if score > bestScore {
+				bestScore = score
+				bestCloneCandidate = cc
+			}
+		}
+	}
+
+	if bestCloneCandidate == nil {
+		return nil, fmt.Errorf("no matching clone candidate found")
+	}
+
+	return bestCloneCandidate, nil
 }
 
 func (sc *Sketcher) Sketch(dir string, manifest v1.Manifest) (bytesClonedCount int64, matchedSegmentsCount int64, err error) {
@@ -79,7 +121,7 @@ func (sc *Sketcher) Sketch(dir string, manifest v1.Manifest) (bytesClonedCount i
 		}
 		bytesClonedCount += fr.Size()
 		matchedSegmentsCount += int64(bestScore)
-		src := filepath.Join(bestCloneCandidate.dirPath, fr.Filename)
+		src := bestCloneCandidate.FilePath()
 		dest := filepath.Join(dir, fr.Filename)
 		if src == dest {
 			continue
@@ -122,20 +164,31 @@ func (sc *Sketcher) findCloneCandidates() ([]*cloneCandidate, error) {
 		if err != nil {
 			return nil, err
 		}
+		defer f.Close()
 		manifest, err := v1.ParseManifest(f)
-		if err == nil {
-			descriptors := make([]v1.Descriptor, 0)
-			for _, d := range manifest.Layers {
-				descriptors = append(descriptors, d)
-			}
-			candidates = append(candidates, &cloneCandidate{
-				descriptors: descriptors,
-				dirPath:     filepath.Dir(job.path),
-			})
-		}
-		f.Close()
 		if err != nil {
 			return nil, err
+		}
+		// Map to group descriptors by filename
+		fileDescriptorMap := make(map[string][]filesegment.Descriptor)
+
+		// Parse each layer and group by filename
+		for _, l := range manifest.Layers {
+			segmentDescriptor, err := filesegment.ParseDescriptor(l)
+			if err != nil {
+				return nil, fmt.Errorf("unable to parse descriptor: %w", err)
+			}
+			filename := segmentDescriptor.Filename()
+			fileDescriptorMap[filename] = append(fileDescriptorMap[filename], *segmentDescriptor)
+		}
+
+		// Create clone candidates for each file
+		for filename, descriptors := range fileDescriptorMap {
+			candidates = append(candidates, &cloneCandidate{
+				descriptors: descriptors,            // All descriptors from the same file
+				dirPath:     filepath.Dir(job.path), // Directory path from the job
+				filename:    filename,
+			})
 		}
 	}
 	return candidates, nil
@@ -144,7 +197,7 @@ func (sc *Sketcher) findCloneCandidates() ([]*cloneCandidate, error) {
 func (sc *Sketcher) computeScore(segmentDigestMap map[string]filesegment.Descriptor, m *cloneCandidate) int {
 	score := 0
 	for _, descriptor := range m.descriptors {
-		_, ok := segmentDigestMap[descriptor.Digest.String()]
+		_, ok := segmentDigestMap[descriptor.Digest().String()]
 		if ok {
 			score += 1
 		}
