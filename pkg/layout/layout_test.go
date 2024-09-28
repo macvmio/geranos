@@ -443,3 +443,56 @@ func TestLayoutMapper_WriteIfNotPresent(t *testing.T) {
 		assert.Equal(t, int64(123), lm2.stats.BytesClonedCount.Load())
 	})
 }
+
+func TestLayoutMapper_Clone_SameFileDifferentNames(t *testing.T) {
+	ctx := context.Background()
+	tempDir, err := os.MkdirTemp("", "clone-same-file-*")
+	require.NoErrorf(t, err, "unable to create temp dir: %v", err)
+	defer os.RemoveAll(tempDir)
+
+	// Setup two directories for Image A and Image B
+	fileContent := []byte("same file content")
+	images := make([]*dirimage.DirImage, 0)
+	for _, x := range []string{"A", "B"} {
+		imgDir := path.Join(tempDir, "tmp"+x)
+		err = os.MkdirAll(imgDir, os.ModePerm)
+		require.NoErrorf(t, err, "unable to create directory for Image A: %v", err)
+		err = os.WriteFile(filepath.Join(imgDir, fmt.Sprintf("disk%s.img", x)), fileContent, 0644)
+		require.NoErrorf(t, err, "unable to write file for image: %v", err)
+		img, err := dirimage.Read(ctx, imgDir, dirimage.WithChunkSize(1))
+		require.NoErrorf(t, err, "unable to read image: %v", err)
+		images = append(images, img)
+	}
+
+	// Write Image A and Image B to the same repo (simulating clone)
+	repoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
+	lm := NewMapper(tempDir)
+
+	// Write Image A
+	srcRefA, err := name.ParseReference("oci.jarosik.online/testrepo/a:v1")
+	require.NoErrorf(t, err, "unable to parse reference for Image A: %v", err)
+	err = lm.Write(ctx, images[0], srcRefA)
+	require.NoErrorf(t, err, "unable to write Image A: %v", err)
+
+	stats1 := lm.Stats()
+	assert.Equal(t, 0, int(stats1.BytesClonedCount))
+	assert.Equal(t, len(fileContent), int(stats1.BytesWrittenCount))
+	// Write Image B
+	lm.stats.Clear()
+	srcRefB, err := name.ParseReference("oci.jarosik.online/testrepo/b:v1")
+	require.NoErrorf(t, err, "unable to parse reference for Image B: %v", err)
+	err = lm.Write(ctx, images[1], srcRefB)
+	require.NoErrorf(t, err, "unable to write Image B: %v", err)
+	stats2 := lm.Stats()
+	assert.Equal(t, len(fileContent), int(stats2.BytesClonedCount))
+	assert.Equal(t, 0, int(stats2.BytesWrittenCount))
+
+	// Validate that both images are present with the correct file names
+	assert.FileExists(t, filepath.Join(repoDir, "a:v1/diskA.img"))
+	assert.FileExists(t, filepath.Join(repoDir, "b:v1/diskB.img"))
+
+	// Validate that the contents of both files are still the same
+	hashAfterA := hashFromFile(t, filepath.Join(repoDir, "a:v1/diskA.img"))
+	hashAfterB := hashFromFile(t, filepath.Join(repoDir, "b:v1/diskB.img"))
+	assert.Equal(t, hashAfterA, hashAfterB, "Both files should still have the same hash after cloning")
+}
