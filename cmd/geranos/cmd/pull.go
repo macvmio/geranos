@@ -14,11 +14,16 @@ func NewCmdPull() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			src := TheAppConfig.Override(args[0])
+			progress := make(chan transporter.ProgressUpdate)
+			defer close(progress)
+
 			opts := []transporter.Option{
 				transporter.WithImagesPath(TheAppConfig.ImagesDirectory),
 				transporter.WithContext(cmd.Context()),
 				transporter.WithVerbose(viper.GetBool("verbose")),
+				transporter.WithProgressChannel(progress),
 			}
+			go transporter.PrintProgress(progress)
 			return transporter.Pull(src, opts...)
 		},
 	}
