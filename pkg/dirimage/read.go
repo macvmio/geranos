@@ -137,5 +137,6 @@ func ReadDigest(dir string) (v1.Hash, error) {
 		return v1.Hash{}, fmt.Errorf("failed to marshal manifest to JSON: %w", err)
 	}
 	hash := sha256.Sum256(jsonData)
-	return v1.NewHash(string(hash[:]))
+	hashString := fmt.Sprintf("sha256:%x", hash)
+	return v1.NewHash(hashString[:])
 }
