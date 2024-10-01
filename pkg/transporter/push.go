@@ -52,7 +52,7 @@ func Push(imageRef string, opt ...Option) error {
 		return fmt.Errorf("unable to parse reference '%v': %w", imageRef, err)
 	}
 
-	_, err = remote.Catalog(opts.ctx, ref.Context().Registry, opts.remoteOptions...)
+	_, err = remote.List(ref.Context(), opts.remoteOptions...)
 	if err != nil {
 		return fmt.Errorf("unable to access registry: %w", err)
 	}
