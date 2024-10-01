@@ -52,11 +52,6 @@ func Push(imageRef string, opt ...Option) error {
 		return fmt.Errorf("unable to parse reference '%v': %w", imageRef, err)
 	}
 
-	_, err = remote.List(ref.Context(), opts.remoteOptions...)
-	if err != nil {
-		return fmt.Errorf("unable to access registry: %w", err)
-	}
-
 	lm := layout.NewMapper(opts.imagesPath)
 
 	img, err := lm.Read(opts.ctx, ref)
