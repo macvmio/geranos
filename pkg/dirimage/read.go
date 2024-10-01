@@ -1,8 +1,8 @@
 package dirimage
 
 import (
+	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -136,7 +136,6 @@ func ReadDigest(dir string) (v1.Hash, error) {
 	if err != nil {
 		return v1.Hash{}, fmt.Errorf("failed to marshal manifest to JSON: %w", err)
 	}
-	hash := sha256.Sum256(jsonData)
-	hashString := fmt.Sprintf("sha256:%x", hash)
-	return v1.NewHash(hashString[:])
+	hash, _, err := v1.SHA256(bytes.NewBuffer(jsonData))
+	return hash, err
 }
