@@ -106,6 +106,11 @@ func Read(ctx context.Context, dir string, opt ...Option) (*DirImage, error) {
 		},
 		Created: v1.Time{Time: time.Now()},
 	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to mutate config file: %w", err)
+	}
+	img = mutate.MediaType(img, ManifestMediaType)
+	img = mutate.ConfigMediaType(img, ConfigMediaType)
 	return &DirImage{
 		Image:          img,
 		BytesReadCount: bytesReadCount,

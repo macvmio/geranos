@@ -2,8 +2,12 @@ package dirimage
 
 import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/mobileinf/geranos/pkg/filesegment"
 )
+
+var ManifestMediaType = types.MediaType("application/vnd.oci.image.manifest.v1+json")
+var ConfigMediaType = types.MediaType("application/vnd.oci.image.config.v1+json")
 
 type DirImage struct {
 	v1.Image
