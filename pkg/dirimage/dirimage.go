@@ -6,6 +6,7 @@ import (
 	"github.com/mobileinf/geranos/pkg/filesegment"
 )
 
+// https://opencontainers.org/posts/blog/2024-03-13-image-and-distribution-1-1/
 var ManifestMediaType = types.MediaType("application/vnd.oci.image.manifest.v1+json")
 var ConfigMediaType = types.MediaType("application/vnd.oci.image.config.v1+json")
 
