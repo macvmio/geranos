@@ -3,7 +3,7 @@ package transporter
 import (
 	"fmt"
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/mobileinf/geranos/pkg/layout"
+	"github.com/macvmio/geranos/pkg/layout"
 )
 
 func Adopt(src string, dst string, opt ...Option) error {

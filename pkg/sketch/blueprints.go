@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/mobileinf/geranos/pkg/filesegment"
+	"github.com/macvmio/geranos/pkg/filesegment"
 )
 
 type fileBlueprint struct {

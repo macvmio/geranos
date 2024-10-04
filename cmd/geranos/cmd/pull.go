@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/mobileinf/geranos/pkg/transporter"
+	"github.com/macvmio/geranos/pkg/transporter"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

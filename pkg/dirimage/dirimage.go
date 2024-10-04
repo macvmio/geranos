@@ -3,7 +3,7 @@ package dirimage
 import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
-	"github.com/mobileinf/geranos/pkg/filesegment"
+	"github.com/macvmio/geranos/pkg/filesegment"
 )
 
 // https://opencontainers.org/posts/blog/2024-03-13-image-and-distribution-1-1/

@@ -3,7 +3,7 @@ package transporter
 import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/mobileinf/geranos/pkg/layout"
+	"github.com/macvmio/geranos/pkg/layout"
 )
 
 func ReadManifest(src string, opt ...Option) (*v1.Manifest, error) {

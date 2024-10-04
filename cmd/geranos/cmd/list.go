@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/mobileinf/geranos/pkg/transporter"
+	"github.com/macvmio/geranos/pkg/transporter"
 	"github.com/spf13/cobra"
 )
 

@@ -2,7 +2,7 @@ package transporter
 
 import (
 	"fmt"
-	"github.com/mobileinf/geranos/pkg/dirimage"
+	"github.com/macvmio/geranos/pkg/dirimage"
 	"strings"
 )
 

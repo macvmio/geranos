@@ -5,7 +5,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/mobileinf/geranos/pkg/dirimage"
+	"github.com/macvmio/geranos/pkg/dirimage"
 	"log"
 )
 

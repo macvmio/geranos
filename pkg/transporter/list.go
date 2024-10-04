@@ -2,7 +2,7 @@ package transporter
 
 import (
 	"fmt"
-	"github.com/mobileinf/geranos/pkg/layout"
+	"github.com/macvmio/geranos/pkg/layout"
 )
 
 func List(opt ...Option) error {

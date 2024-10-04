@@ -1,4 +1,4 @@
-module github.com/mobileinf/geranos
+module github.com/macvmio/geranos
 
 go 1.22
 

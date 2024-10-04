@@ -3,7 +3,7 @@ package transporter
 import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/mobileinf/geranos/pkg/layout"
+	"github.com/macvmio/geranos/pkg/layout"
 )
 
 func Pull(src string, opt ...Option) error {

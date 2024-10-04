@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/mobileinf/geranos/pkg/appconfig"
+	"github.com/macvmio/geranos/pkg/appconfig"
 	"github.com/spf13/viper"
 )
 

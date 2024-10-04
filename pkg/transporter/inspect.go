@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/mobileinf/geranos/pkg/layout"
+	"github.com/macvmio/geranos/pkg/layout"
 )
 
 func Inspect(rawRef string, opt ...Option) (string, error) {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
-	"github.com/mobileinf/geranos/pkg/zstd"
+	"github.com/macvmio/geranos/pkg/zstd"
 	"io"
 	"log"
 	"os"
