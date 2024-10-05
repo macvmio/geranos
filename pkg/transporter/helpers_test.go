@@ -103,7 +103,7 @@ func makeBigTestVMAt(t *testing.T, tempDir, ref string) (sha string) {
 	err := os.MkdirAll(d, os.ModePerm)
 	assert.NoError(t, err)
 	require.NoError(t, err)
-	err = makeRandomFile(t, filepath.Join(d, "disk.img"), 130*1024*1024)
+	err = makeRandomFile(t, filepath.Join(d, "disk.img"), 270*1024*1024)
 	require.NoError(t, err)
 
 	return hashFromFile(t, filepath.Join(d, "disk.img"))

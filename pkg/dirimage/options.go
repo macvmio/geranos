@@ -11,6 +11,7 @@ type options struct {
 	printf                   func(fmt string, argv ...any)
 	networkFailureRetryCount int
 	progress                 chan<- ProgressUpdate
+	omitLayersContent        bool
 }
 
 type Option func(opts *options)
@@ -51,5 +52,11 @@ func WithLogFunction(log func(fmt string, args ...any)) Option {
 func WithProgressChannel(progress chan<- ProgressUpdate) Option {
 	return func(o *options) {
 		o.progress = progress
+	}
+}
+
+func WithOmitLayersContent() Option {
+	return func(o *options) {
+		o.omitLayersContent = true
 	}
 }

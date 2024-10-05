@@ -49,7 +49,7 @@ func TestPullAndPush_pullingAgainShouldNotDownloadAnyBlob(t *testing.T) {
 		assert.NoError(t, err)
 		shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", ref, "disk.img"))
 		assert.Equal(t, shaBefore, shaAfter)
-		assert.Equal(t, 2, calculateAccessed(recordedRequests, "GET", "/blobs"))
+		assert.Equal(t, 3, calculateAccessed(recordedRequests, "GET", "/blobs"))
 	})
 	clear(recordedRequests)
 
@@ -70,12 +70,16 @@ func TestPullAndPush_multipleSlightlyDifferentTags(t *testing.T) {
 
 	tempDir, opts := optionsForTesting(t)
 
+	resetRecordedRequests := func() {
+		recordedRequests = (recordedRequests)[:0]
+	}
+
 	checksumsUploaded := make([]string, 5)
 	t.Run("pushing must avoid uploading same blobs to remote", func(t *testing.T) {
 		ref := refOnServer(s.URL, "test-vm:1.0")
 		makeBigTestVMAt(t, tempDir, ref)
 
-		expectedBlobUploads := []int{0, 4, 6, 8, 11}
+		expectedBlobUploads := []int{0, 6, 2, 2, 3}
 		for i := 1; i <= 4; i++ {
 			ithRef := refOnServer(s.URL, fmt.Sprintf("test-vm:1.%d", i))
 			err := Clone(ref, ithRef, opts...)
@@ -84,6 +88,7 @@ func TestPullAndPush_multipleSlightlyDifferentTags(t *testing.T) {
 			if i == 4 {
 				checksumsUploaded[i] = modifyBigTestVMAt(t, tempDir, ithRef, int64(64*1024*1024+i*18))
 			}
+			resetRecordedRequests()
 			err = Push(ithRef, opts...)
 			require.NoError(t, err)
 			assert.Equal(t, expectedBlobUploads[i], calculateAccessed(recordedRequests, "PUT", "/blobs"))
@@ -96,10 +101,11 @@ func TestPullAndPush_multipleSlightlyDifferentTags(t *testing.T) {
 	tempDir, opts = optionsForTesting(t)
 
 	t.Run("pulling must avoid downloading same blobs", func(t *testing.T) {
-		expectedBlobDownloads := []int{0, 3, 4, 5, 7}
+		expectedBlobDownloads := []int{0, 6, 2, 2, 3}
 		checksumsDownloaded := make([]string, 5)
 		for i := 1; i <= 4; i++ {
 			ithRef := refOnServer(s.URL, fmt.Sprintf("test-vm:1.%d", i))
+			resetRecordedRequests()
 			err = Pull(ithRef, opts...)
 			require.NoError(t, err)
 			assert.Equal(t, expectedBlobDownloads[i], calculateAccessed(recordedRequests, "GET", "/blobs"))
@@ -201,7 +207,7 @@ func TestPull_WithForceOption(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify that the image was written even though it already exists (Check by checking the number of requests)
-		assert.Equal(t, 2, calculateAccessed(recordedRequests, "GET", "/blobs"))
+		assert.Equal(t, 3, calculateAccessed(recordedRequests, "GET", "/blobs"))
 		shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", ref, "disk.img"))
 		assert.Equal(t, shaBefore, shaAfter)
 	})
@@ -213,7 +219,7 @@ func TestPull_WithForceOption(t *testing.T) {
 		require.NoError(t, err)
 		clear(recordedRequests)
 
-		nonForcedOpts := append(opts, WithForce(false))
+		nonForcedOpts := append(opts)
 
 		// Pull the same image again without force
 		err = Pull(ref, nonForcedOpts...)

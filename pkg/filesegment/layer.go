@@ -112,10 +112,6 @@ func (pfl *Layer) Stop() int64 {
 	return pfl.stop
 }
 
-func (pfl *Layer) GetMediaType() types.MediaType {
-	return pfl.mediaType
-}
-
 func (pfl *Layer) Annotations() map[string]string {
 	return map[string]string{
 		FilenameAnnotationKey: filepath.Base(pfl.filePath),

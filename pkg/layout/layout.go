@@ -10,8 +10,8 @@ import (
 	"github.com/macvmio/geranos/pkg/dirimage"
 	"github.com/macvmio/geranos/pkg/duplicator"
 	"github.com/macvmio/geranos/pkg/filesegment"
-	"reflect"
 	"runtime"
+	"slices"
 
 	"github.com/macvmio/geranos/pkg/sketch"
 	"github.com/macvmio/geranos/pkg/sparsefile"
@@ -88,14 +88,17 @@ func (lm *Mapper) writeLayer(destinationDir string, segment *filesegment.Descrip
 }
 
 func (lm *Mapper) WriteIfNotPresent(ctx context.Context, img v1.Image, ref name.Reference) error {
-	originManifest, err := img.Manifest()
+	rawOriginManifest, err := img.RawManifest()
 	if err != nil {
 		return fmt.Errorf("failed to read origin manifest: %w", err)
 	}
-	localManifest, err := dirimage.ReadManifest(lm.refToDir(ref))
-	if err == nil && reflect.DeepEqual(originManifest, localManifest) {
-		fmt.Println("skipped writing because manifests are the same")
-		return nil
+	localImg, err := dirimage.Read(ctx, lm.refToDir(ref), dirimage.WithOmitLayersContent())
+	if err == nil {
+		rawLocalManifest, err := localImg.RawManifest()
+		if err == nil && slices.Equal(rawOriginManifest, rawLocalManifest) {
+			fmt.Println("skipped writing because manifests are the same")
+			return nil
+		}
 	}
 	return lm.Write(ctx, img, ref)
 }
@@ -223,7 +226,7 @@ func directorySize(path string) (int64, error) {
 }
 
 func (lm *Mapper) ContainsManifest(ref name.Reference) bool {
-	_, err := dirimage.ReadManifest(lm.refToDir(ref))
+	_, err := dirimage.Read(context.Background(), lm.refToDir(ref), dirimage.WithOmitLayersContent())
 	return err == nil
 }
 
@@ -250,9 +253,6 @@ func (lm *Mapper) List() ([]Properties, error) {
 		processedPath = strings.Trim(processedPath, "/")
 		ref, err := name.ParseReference(processedPath, name.StrictValidation)
 		if err != nil {
-			return nil
-		}
-		if !lm.ContainsManifest(ref) {
 			return nil
 		}
 		dirSize, err := directorySize(path)
@@ -296,12 +296,4 @@ func (lm *Mapper) Stats() ImmutableStatistics {
 		CompressedBytesCount: lm.stats.CompressedBytesCount.Load(),
 		MatchedSegmentsCount: lm.stats.MatchedSegmentsCount.Load(),
 	}
-}
-
-func (lm *Mapper) ReadManifest(ref name.Reference) (*v1.Manifest, error) {
-	return dirimage.ReadManifest(lm.refToDir(ref))
-}
-
-func (lm *Mapper) ReadDigest(ref name.Reference) (v1.Hash, error) {
-	return dirimage.ReadDigest(lm.refToDir(ref))
 }

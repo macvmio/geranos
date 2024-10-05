@@ -64,12 +64,13 @@ func TestConvert_ValidImage(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		layer, err := filesegment.NewLayer(filepath.Join(tempDir, "file1.img"), filesegment.WithRange(int64(i*10), int64(i*10+9)))
 		require.NoError(t, err)
-
+		mt, err := layer.MediaType()
+		require.NoError(t, err)
 		img, err = mutate.Append(img, mutate.Addendum{
 			Layer:       layer,
 			History:     v1.History{},
 			Annotations: layer.Annotations(),
-			MediaType:   layer.GetMediaType(),
+			MediaType:   mt,
 		})
 		require.NoError(t, err)
 	}

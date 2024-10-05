@@ -16,8 +16,6 @@ import (
 	"syscall"
 )
 
-const LocalManifestFilename = ".oci.manifest.json"
-
 func writeToSegment(destinationDir string, segment *filesegment.Descriptor, src io.ReadCloser) (written int64, skipped int64, err error) {
 	// Here: we have io.ReadCloser dumping to a file at given location
 	f, err := filesegment.NewWriter(destinationDir, segment)
@@ -86,7 +84,7 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 	if di.Image == nil {
 		return errors.New("invalid image")
 	}
-	if err := di.DeleteManifest(destinationDir); err != nil {
+	if err := di.deleteManifest(destinationDir); err != nil {
 		return fmt.Errorf("failed to delete manifest: %w", err)
 	}
 	opts := makeOptions(opt...)
@@ -100,6 +98,7 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 		err error
 	}
 	bytesTotal := di.Length()
+	sendProgressUpdate(opts.progress, 0, bytesTotal)
 	jobs := make(chan Job, opts.workersCount)
 	g, ctx := errgroup.WithContext(ctx)
 	layerOpts := []filesegment.LayerOpt{filesegment.WithLogFunction(opts.printf)}
@@ -158,19 +157,26 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 		return err
 	}
 
-	return di.WriteManifest(destinationDir)
+	return di.writeConfigAndManifest(destinationDir)
 }
 
-func (di *DirImage) WriteManifest(destinationDir string) error {
+func (di *DirImage) writeConfigAndManifest(destinationDir string) error {
 	rawManifest, err := di.Image.RawManifest()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get raw manifest: %w", err)
 	}
-
+	rawConfig, err := di.Image.RawConfigFile()
+	if err != nil {
+		return fmt.Errorf("failed to get raw config: %w", err)
+	}
+	err = os.WriteFile(filepath.Join(destinationDir, LocalConfigFilename), rawConfig, 0777)
+	if err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
 	return os.WriteFile(filepath.Join(destinationDir, LocalManifestFilename), rawManifest, 0o777)
 }
 
-func (di *DirImage) DeleteManifest(destinationDir string) error {
+func (di *DirImage) deleteManifest(destinationDir string) error {
 	manifestPath := filepath.Join(destinationDir, LocalManifestFilename)
 
 	err := os.Remove(manifestPath)

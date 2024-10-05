@@ -45,7 +45,7 @@ func TestWrite_ContextCancelledDuringWork(t *testing.T) {
 }
 */
 
-func TestDirImage_DeleteManifest(t *testing.T) {
+func TestDirImage_deleteManifest(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "test-delete-manifest")
 	if err != nil {
@@ -62,8 +62,8 @@ func TestDirImage_DeleteManifest(t *testing.T) {
 			t.Fatalf("Failed to create manifest file: %v", err)
 		}
 
-		// Call the DeleteManifest function
-		err := di.DeleteManifest(tempDir)
+		// Call the deleteManifest function
+		err := di.deleteManifest(tempDir)
 		if err != nil {
 			t.Fatalf("Expected no error, but got: %v", err)
 		}
@@ -81,8 +81,8 @@ func TestDirImage_DeleteManifest(t *testing.T) {
 			t.Fatalf("Failed to remove manifest file in setup: %v", err)
 		}
 
-		// Call the DeleteManifest function
-		err := di.DeleteManifest(tempDir)
+		// Call the deleteManifest function
+		err := di.deleteManifest(tempDir)
 		if err != nil {
 			t.Fatalf("Expected no error when file does not exist, but got: %v", err)
 		}
