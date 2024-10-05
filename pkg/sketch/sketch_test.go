@@ -316,6 +316,22 @@ func TestSketchConstructor_ComputeScore(t *testing.T) {
 			},
 			expectedScore: 1,
 		},
+		{
+			name: "Duplicate Descriptors",
+			segmentDescriptors: map[string]filesegment.Descriptor{
+				"sha256:hash1": newDescriptor("hash1"),
+				"sha256:hash2": newDescriptor("hash2"),
+				"sha256:hash3": newDescriptor("hash3"),
+			},
+			descriptors: []filesegment.Descriptor{
+				newDescriptor("hash1"),
+				newDescriptor("hash1"), // Duplicate
+				newDescriptor("hash2"),
+				newDescriptor("hash2"), // Duplicate
+				newDescriptor("hash3"),
+			},
+			expectedScore: 3, // Should count each unique digest only once
+		},
 	}
 
 	// Run test cases

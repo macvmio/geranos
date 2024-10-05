@@ -196,12 +196,15 @@ func (sc *Sketcher) findCloneCandidates() ([]*cloneCandidate, error) {
 
 func (sc *Sketcher) computeScore(segmentDigestMap map[string]filesegment.Descriptor, m *cloneCandidate) int {
 	score := 0
+	seenDigests := make(map[string]struct{})
 	for _, descriptor := range m.descriptors {
-		_, ok := segmentDigestMap[descriptor.Digest().String()]
-		if ok {
-			score += 1
+		digestStr := descriptor.Digest().String()
+		if _, alreadySeen := seenDigests[digestStr]; !alreadySeen {
+			seenDigests[digestStr] = struct{}{}
+			if _, ok := segmentDigestMap[digestStr]; ok {
+				score += 1
+			}
 		}
 	}
-
 	return score
 }
