@@ -17,7 +17,7 @@ builds:
     ldflags:
       - -s
       - -w
-      - -X github.com/tomekjarosik/geranos/cmd/geranos/cmd.Version={{.Version}}
+      - -X github.com/macvmio/geranos/cmd/geranos/cmd.Version={{.Version}}
     goarch:
       - amd64
       - arm64
