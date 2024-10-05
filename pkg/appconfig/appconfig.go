@@ -16,6 +16,7 @@ type Config struct {
 	ImagesDirectory string    `mapstructure:"images_directory"`
 	Contexts        []Context `mapstructure:"contexts"`
 	CurrentContext  string    `mapstructure:"current_context"`
+	Verbose         bool      `mapstructure:"verbose"`
 }
 
 func (c *Config) findCurrentContext() (*Context, error) {

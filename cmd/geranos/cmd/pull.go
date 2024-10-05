@@ -3,7 +3,6 @@ package cmd
 import (
 	"github.com/macvmio/geranos/pkg/transporter"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func NewCmdPull() *cobra.Command {
@@ -20,7 +19,7 @@ func NewCmdPull() *cobra.Command {
 			opts := []transporter.Option{
 				transporter.WithImagesPath(TheAppConfig.ImagesDirectory),
 				transporter.WithContext(cmd.Context()),
-				transporter.WithVerbose(viper.GetBool("verbose")),
+				transporter.WithVerbose(TheAppConfig.Verbose),
 				transporter.WithProgressChannel(progress),
 			}
 			go transporter.PrintProgress(progress)
