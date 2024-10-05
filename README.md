@@ -1,81 +1,176 @@
 # Geranos
 
-[![Build Status](https://github.com/mobileinf/geranos/actions/workflows/main.yml/badge.svg)](https://github.com/mobileinf/geranos/actions/workflows/main.yml)
+[![Build Status](https://github.com/macvmio/geranos/actions/workflows/main.yml/badge.svg)](https://github.com/macvmio/geranos/actions)
+[![Build Status](https://github.com/macvmio/geranos/actions/workflows/release.yml/badge.svg)](https://github.com/macvmio/geranos/actions)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-In a world where data is as vast as oceans, and speed is the essence of success,
-there emerges a champion for efficiency and innovation: **Geranos**.
-Powered by the robust `go-containerregistry` library,
-Geranos is not your ordinary tool. It's a specialized ally in the era of big data,
-designed to move mountains—of data, that is.
-Specifically, it shines when handling gigantic disk images,
-think epic sagas stored on disk, as large as 20GB or more.
-Whether you're a digital adventurer transferring VM disk images across the vast expanses of the internet, or a data guardian ensuring your treasure trove of information is safely archived, Geranos is your trusty steed.
+## Introduction
 
-## The Tale of Geranos
+Geranos is a command-line tool written in Go for efficiently transferring **macOS virtual machine images** to and from OCI-compliant container registries. Specifically designed for macOS VMs utilizing the **APFS Copy-on-Write filesystem**, Geranos optimizes both bandwidth and disk usage by leveraging sparse files and filesystem cloning capabilities.
 
-Imagine the vastness of a digital realm where Alice, a skilled creator of Virtual Machines, crafts a colossal world, a VM disk that spans 200GB. Her creation is brimming with details, yet, much like a universe full of dark matter, not all spaces are filled. This world is a sparse file, expansive yet efficient in its own existence, with 50GB of true essence.
+Geranos integrates seamlessly with [Curie](https://github.com/macvmio/curie), a macOS VM virtualization program, allowing users to pull VM images and run them with minimal effort.
 
-### The Quest Begins: Pushing Boundaries
+## Features
 
-Alice seeks to share her creation with Bob, a fellow architect in a distant land. She turns to Geranos, a tool known for its cunning and agility. With a few commands, Geranos embarks on a mission, pushing this vast digital world into the OCI-compatible registry, a mystical realm where artifacts can be stored and summoned from anywhere in the digital cosmos.
+- **Efficient Transfer of Large VM Images**: Handles VM images typically over 30GB in size.
+- **Bandwidth Optimization**: Verifies local hashes in `disk.img` files to minimize data transfer.
+- **Disk Usage Optimization**: Utilizes clone operations for efficient cloning and skips writing zeros to save disk space.
+- **Integration with Curie**: Easily pull VM images with Geranos and run them using Curie.
+- **OCI Registry Support**: Push and pull VM images from any OCI-compliant container registry.
+- **Familiar Interface**: Command-line interface similar to Docker and `crane`, making it easy for users familiar with these tools.
 
-### The Saga Continues: Pulling from the Void
+## Table of Contents
 
-Bob, intrigued by Alice's creation, uses Geranos to pull this world into his realm. Despite the original size, what travels through the digital ether is not the full 200GB, but merely the 50GB of allocated essence. A marvel of efficiency!
+- [Installation](#installation)
+- [Usage](#usage)
+    - [Configuration](#configuration)
+    - [Pulling a VM Image](#pulling-a-vm-image)
+    - [Running a Pulled VM Image with Curie](#running-a-pulled-vm-image-with-curie)
+    - [Available Commands](#available-commands)
+- [Contributing](#contributing)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
+- [Future Plans](#future-plans)
+- [Contact and Support](#contact-and-support)
 
-### A Twist in the Tale: Changes Emerge
+## Installation
 
-As all great creations evolve, so does Alice's. She adds a new vista to her digital world, changing its landscape. In a traditional tale, this would require sending the entire world anew. But Geranos is no ordinary tool. It cleverly splits the world into chunks, sending only what has changed—a testament to its wisdom and foresight.
+Geranos can be downloaded from the [GitHub releases page](https://github.com/macvmio/geranos/releases).
 
-### The Reunion: Smart Merging
+### Prerequisites
 
-Bob, eager to see the new changes, faces no daunting task. His version of the world is already closely intertwined with Alice's original. Instead of starting from scratch, Geranos uses its magic to clone what he has and weaves in the new changes, sparing him time, bandwidth, and space on his mystical device.
+- **Go**: If you plan to build Geranos from source, ensure you have Go installed.
+- **Curie**: For running pulled VM images, install [Curie](https://github.com/macvmio/curie).
 
-## Join the Adventure
+### Download Binary
 
-Geranos is not just a tool; it's a companion for those who dare to push the boundaries of data transfer, who value speed, efficiency, and the joy of sharing their digital creations. Whether you're a seasoned data wizard or a curious digital wanderer, Geranos invites you to join in this grand adventure.
+1. **Visit the Releases Page**: Go to the [Geranos Releases](https://github.com/macvmio/geranos/releases) page.
+2. **Download the Binary**: Choose the appropriate binary for your operating system.
+3. **Install the Binary**:
+    - Move the binary to a directory in your `$PATH`, such as `/usr/local/bin`.
+    - Make the binary executable:
+      ```bash
+      chmod +x /usr/local/bin/geranos
+      ```
 
-### Installation: The Gateway to Adventure
+### Build from Source (Optional)
 
-In the realm of digital adventures, every hero needs their trusted tools. For those ready to embark on the journey with Geranos, securing this powerful ally is a rite of passage, a step towards mastering the art of efficient data transfer. Fear not, for this guide shall illuminate the path to wielding Geranos, transforming any willing into a guardian of data realms.
-
-#### The Tome of Downloading
-
-First, one must journey to the ancient and ever-expanding archives of GitHub, a place where countless tools and treasures await those brave enough to seek them. Within these archives lies the latest artifact of Geranos, forged by its creators as a Go binary—a magical essence that brings Geranos to life.
-
-**Embark on your quest by navigating here:**
-
-[The Vault of Geranos Releases](https://github.com/tomekjarosik/geranos/releases)
-
-Upon arriving, seekers shall find different versions of Geranos, each suited to different lands and architectures. Choose wisely, picking the version that resonates with the essence of your own mystical device.
-
-#### The Ritual of Installation
-
-Once the artifact is secured, the next step is to invoke it, a simple yet crucial rite:
-
-1. **Place the Artifact**: Move the downloaded Geranos binary into a directory of power, one that the mystical pathways of your device, known as the `PATH`, can easily find. This ensures that invoking Geranos requires but a whisper, no matter where you stand in the digital realm.
-
-2. **Grant the Ritual of Invocation**: On the altar of your command line, bestow upon Geranos the blessing of execution. In the land of Unix, this rite is known thusly:
+If you prefer to build from source:
 
 ```bash
-chmod +x /path/to/geranos
+git clone https://github.com/macvmio/geranos.git
+cd geranos
+go build -o geranos main.go
 ```
-3. **Summon Geranos**: With the artifact now ready, call upon it from the command line, simply by uttering its name:
-geranos --help
 
-Behold, as the essence of Geranos fills your terminal, offering its services and guidance. You, brave adventurer, are now ready to command the winds of data, steering them towards your will.
+## Usage
 
-With Geranos by your side, the digital realm stands ready for you to explore, transfer, and transform. Large lands of data, once daunting and unmapped, are now within your grasp to command and conquer.
+### Configuration
 
-May your paths be swift, your data light, and your adventures grand. Welcome to the fellowship of Geranos wielders.
+Geranos requires a configuration file located at `~/.geranos/config.yaml`. This file specifies where images are stored locally.
 
+**Example `~/.geranos/config.yaml`:**
 
-### Contribution and Lore
+```yaml
+images_directory: /Users/yourusername/.curie/.images
+```
 
-The story of Geranos is ever-evolving, written by those who wield it. If you wish to contribute to its legend, your wisdom and skills are welcome. Together, we'll shape the future of data transfer, making the digital realm a more efficient and magical place.
+Replace `/Users/yourusername` with your actual username or the path where Curie stores images.
 
-### The Scroll of License
+### Pulling a VM Image
 
-Like all great tales, the story of Geranos adheres to its own code—the license under which it's shared. Find out how you can use, modify, and share Geranos in your own sagas.
+To pull a macOS VM image from an OCI registry:
 
-Embark on your journey with Geranos, and transform the way you handle vast digital worlds. Together, we write the future—one chunk at a time.
+```bash
+geranos pull ghcr.io/macvmio/geranos:base-15.0.1
+```
+
+This command downloads the VM image while optimizing bandwidth and disk usage.
+
+### Running a Pulled VM Image with Curie
+
+After pulling the image, run it using Curie:
+
+```bash
+curie run ghcr.io/macvmio/geranos:base-15.0.1
+```
+
+### Available Commands
+
+Geranos provides several commands:
+
+- **adopt**: Adopt a directory as an image under the current local registry.
+- **clone**: Locally clone one reference to another name.
+- **completion**: Generate the autocompletion script for the specified shell.
+- **context**: Manage contexts.
+- **help**: Help about any command.
+- **inspect**: Inspect details of a specific OCI image.
+- **list**: List all OCI images in a specific local registry.
+- **login**: Log in to a registry.
+- **logout**: Log out of a registry.
+- **pull**: Pull an OCI image from a registry and extract the file.
+- **push**: Push a large file as an OCI image to a registry.
+- **remote**: Manipulate remote repositories.
+- **remove**: Remove locally stored images.
+- **version**: Print the version.
+
+**General Flags:**
+
+- `-h`, `--help`: Help for Geranos.
+- `-v`, `--verbose`: Enable verbose output.
+- `--version`: Show Geranos version.
+
+**Get Help for a Command:**
+
+```bash
+geranos [command] --help
+```
+
+### Examples
+
+- **List remote images**
+  
+  ```bash
+  geranos remote images ghcr.io/macvmio/geranos
+  ```
+
+- **Push an Image to a Registry:**
+
+  ```bash
+  geranos push registry.example.com/namespace/myimage:tag
+  ```
+
+- **List Images in Local Registry:**
+
+  ```bash
+  geranos list
+  ```
+
+## Contributing
+
+Contributions are welcome! Please see the [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+- **Reporting Issues**: Use the [issue tracker](https://github.com/macvmio/geranos/issues) to report bugs or request features.
+- **Pull Requests**: Submit pull requests to the `main` branch.
+
+## License
+
+Geranos is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Inspired by [go-containerregistry](https://github.com/google/go-containerregistry).
+- Utilizes [Cobra](https://github.com/spf13/cobra) and [Viper](https://github.com/spf13/viper) for command-line interface and configuration management.
+
+## Future Plans
+
+- Integration with the upcoming [macvm.io](https://macvm.io) website.
+- Enhanced filesystem optimization features.
+- Support for additional VM formats and platforms.
+
+## Contact and Support
+
+- **GitHub Repository**: [github.com/macvmio/geranos](https://github.com/macvmio/geranos)
+- **Issues**: [github.com/macvmio/geranos/issues](https://github.com/macvmio/geranos/issues)
+- **Email**: [contact@macvm.io](mailto:contact@macvm.io)
+
