@@ -337,39 +337,6 @@ func TestLayoutMapper_Write_MustOverwriteBiggerFileIfAlreadyExist(t *testing.T) 
 	assert.Equal(t, beforeHash, hash4)
 }
 
-func TestLayoutMapper_ContainsAny(t *testing.T) {
-	ref, err := name.ParseReference("example.com/repo/image:tag")
-	assert.NoError(t, err)
-
-	// Test case 1: Directory exists
-	t.Run("Directory exists", func(t *testing.T) {
-		tmpDir, err := os.MkdirTemp("", "test-directory-*")
-		assert.NoError(t, err)
-		lm := &Mapper{rootDir: tmpDir}
-		defer os.RemoveAll(tmpDir) // Clean up after the test
-
-		dir := filepath.Join(tmpDir, ref.String())
-		err = os.MkdirAll(dir, 0755)
-		assert.NoError(t, err)
-
-		exists, err := lm.ContainsAny(ref)
-		assert.NoError(t, err)
-		assert.True(t, exists)
-	})
-
-	// Test case 2: Directory does not exist
-	t.Run("Directory does not exist", func(t *testing.T) {
-		tmpDir, err := os.MkdirTemp("", "test-directory-*")
-		assert.NoError(t, err)
-		lm := &Mapper{rootDir: tmpDir}
-		defer os.RemoveAll(tmpDir) // Clean up after the test
-
-		exists, err := lm.ContainsAny(ref)
-		assert.NoError(t, err)
-		assert.False(t, exists)
-	})
-}
-
 func TestLayoutMapper_WriteIfNotPresent(t *testing.T) {
 	ctx := context.Background()
 	tempDir, err := os.MkdirTemp("", "layout-mapper-*")
@@ -495,4 +462,129 @@ func TestLayoutMapper_Clone_SameFileDifferentNames(t *testing.T) {
 	hashAfterA := hashFromFile(t, filepath.Join(repoDir, "a:v1/diskA.img"))
 	hashAfterB := hashFromFile(t, filepath.Join(repoDir, "b:v1/diskB.img"))
 	assert.Equal(t, hashAfterA, hashAfterB, "Both files should still have the same hash after cloning")
+}
+
+func TestLayoutMapper_Rehash(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("ImageExists", func(t *testing.T) {
+		tempDir := t.TempDir()
+		lm := NewMapper(tempDir)
+		ref, err := name.ParseReference("testrepo/image:v1")
+		require.NoError(t, err)
+
+		// Set up test image
+		imageDir := lm.refToDir(ref)
+		require.NoError(t, os.MkdirAll(imageDir, os.ModePerm))
+		require.NoError(t, generateRandomFile(filepath.Join(imageDir, "disk.img"), 1024))
+
+		// Initial read and write
+		img, err := dirimage.Read(ctx, imageDir, lm.opts...)
+		require.NoError(t, err)
+		require.NoError(t, img.WriteConfigAndManifest(imageDir))
+
+		// Modify the image file
+		require.NoError(t, appendRandomBytesToFile(filepath.Join(imageDir, "disk.img"), 512))
+
+		// Call Rehash
+		require.NoError(t, lm.Rehash(ctx, ref))
+
+		// Verify manifest and config are updated
+		newImg, err := dirimage.Read(ctx, imageDir, lm.opts...)
+		require.NoError(t, err)
+		require.NotNil(t, newImg)
+		manifest1, err := img.Manifest()
+		require.NoError(t, err)
+		manifest2, err := newImg.Manifest()
+		require.NoError(t, err)
+		assert.NotEqual(t, manifest1.Layers[0].Size, manifest2.Layers[0].Size)
+	})
+
+	t.Run("ImageDoesNotExist", func(t *testing.T) {
+		tempDir := t.TempDir()
+		lm := NewMapper(tempDir)
+		ref, err := name.ParseReference("testrepo/nonexistent:v1")
+		require.NoError(t, err)
+
+		// Attempt to Rehash non-existent image
+		err = lm.Rehash(ctx, ref)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unable to read dirimage")
+	})
+
+	t.Run("NoChanges", func(t *testing.T) {
+		tempDir := t.TempDir()
+		lm := NewMapper(tempDir)
+		ref, err := name.ParseReference("testrepo/image:v1")
+		require.NoError(t, err)
+
+		// Set up test image
+		imageDir := lm.refToDir(ref)
+		require.NoError(t, os.MkdirAll(imageDir, os.ModePerm))
+		require.NoError(t, generateRandomFile(filepath.Join(imageDir, "disk.img"), 1024))
+
+		// Initial read and write
+		img, err := dirimage.Read(ctx, imageDir, lm.opts...)
+		require.NoError(t, err)
+		require.NoError(t, img.WriteConfigAndManifest(imageDir))
+
+		// Record original manifest and config
+		originalManifest, err := os.ReadFile(filepath.Join(imageDir, dirimage.LocalManifestFilename))
+		require.NoError(t, err)
+		originalConfig, err := os.ReadFile(filepath.Join(imageDir, dirimage.LocalConfigFilename))
+		require.NoError(t, err)
+
+		// Call Rehash without changes
+		require.NoError(t, lm.Rehash(ctx, ref))
+
+		// Read manifest and config again
+		newManifest, err := os.ReadFile(filepath.Join(imageDir, dirimage.LocalManifestFilename))
+		require.NoError(t, err)
+		newConfig, err := os.ReadFile(filepath.Join(imageDir, dirimage.LocalConfigFilename))
+		require.NoError(t, err)
+
+		// Verify they are unchanged
+		assert.Equal(t, originalManifest, newManifest)
+		assert.Equal(t, originalConfig, newConfig)
+	})
+
+	t.Run("UpdatesStatistics", func(t *testing.T) {
+		tempDir := t.TempDir()
+		lm := NewMapper(tempDir)
+		ref, err := name.ParseReference("testrepo/image:v1")
+		require.NoError(t, err)
+
+		// Set up test image
+		imageDir := lm.refToDir(ref)
+		require.NoError(t, os.MkdirAll(imageDir, os.ModePerm))
+		require.NoError(t, generateRandomFile(filepath.Join(imageDir, "disk.img"), 2048))
+
+		// Initial read and write
+		img, err := dirimage.Read(ctx, imageDir, lm.opts...)
+		require.NoError(t, err)
+		require.NoError(t, img.WriteConfigAndManifest(imageDir))
+
+		// Reset stats
+		lm.stats.Clear()
+
+		// Call Rehash
+		require.NoError(t, lm.Rehash(ctx, ref))
+
+		// Verify stats
+		assert.Equal(t, img.BytesReadCount, lm.Stats().BytesReadCount)
+	})
+
+	t.Run("InvalidImageDirectory", func(t *testing.T) {
+		tempDir := t.TempDir()
+		lm := NewMapper(tempDir)
+		ref, err := name.ParseReference("testrepo/invalidimage:v1")
+		require.NoError(t, err)
+
+		// No image files created
+
+		// Attempt to Rehash
+		err = lm.Rehash(ctx, ref)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unable to read dirimage")
+	})
 }

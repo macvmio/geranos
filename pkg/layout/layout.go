@@ -151,6 +151,18 @@ func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) e
 	return nil
 }
 
+func (lm *Mapper) Rehash(ctx context.Context, ref name.Reference) error {
+	refStr := lm.refToDir(ref)
+	img, err := dirimage.Read(ctx, refStr, lm.opts...)
+	if err != nil {
+		return fmt.Errorf("unable to read dirimage: %w", err)
+	}
+	st := Statistics{}
+	st.BytesReadCount.Store(img.BytesReadCount)
+	lm.stats.Add(&st)
+	return img.WriteConfigAndManifest(refStr)
+}
+
 func (lm *Mapper) Read(ctx context.Context, ref name.Reference) (v1.Image, error) {
 	refStr := lm.refToDir(ref)
 	img, err := dirimage.Read(ctx, refStr, lm.opts...)
@@ -225,22 +237,9 @@ func directorySize(path string) (int64, error) {
 	return size, err
 }
 
-func (lm *Mapper) ContainsManifest(ref name.Reference) bool {
+func (lm *Mapper) containsManifest(ref name.Reference) bool {
 	_, err := dirimage.Read(context.Background(), lm.refToDir(ref), dirimage.WithOmitLayersContent())
 	return err == nil
-}
-
-// ContainsAny returns true if there is a directory corresponding to the provided reference
-// It does not validate if that directory contains anything useful
-func (lm *Mapper) ContainsAny(ref name.Reference) (bool, error) {
-	info, err := os.Stat(lm.refToDir(ref))
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return info.IsDir(), nil
 }
 
 func (lm *Mapper) List() ([]Properties, error) {
@@ -267,7 +266,7 @@ func (lm *Mapper) List() ([]Properties, error) {
 			Ref:         ref,
 			DiskUsage:   diskUsage,
 			Size:        dirSize,
-			HasManifest: lm.ContainsManifest(ref),
+			HasManifest: lm.containsManifest(ref),
 		})
 		return nil
 	})

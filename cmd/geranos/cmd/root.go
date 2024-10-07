@@ -52,6 +52,7 @@ It relies on sparse files and Copy-on-Write filesystem features to optimize disk
 		NewCmdVersion(),
 		NewCmdRemoteRepos(),
 		NewCmdContext(),
+		NewCmdRehash(),
 	)
 
 	return rootCmd

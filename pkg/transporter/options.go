@@ -74,6 +74,12 @@ func WithVerbose(verbose bool) Option {
 	}
 }
 
+func WithOmitLayersContent() Option {
+	return func(o *options) {
+		o.dirimageOptions = append(o.dirimageOptions, dirimage.WithOmitLayersContent())
+	}
+}
+
 func WithForce(force bool) Option {
 	return func(o *options) {
 		o.force = force

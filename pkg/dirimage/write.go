@@ -157,10 +157,10 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 		return err
 	}
 
-	return di.writeConfigAndManifest(destinationDir)
+	return di.WriteConfigAndManifest(destinationDir)
 }
 
-func (di *DirImage) writeConfigAndManifest(destinationDir string) error {
+func (di *DirImage) WriteConfigAndManifest(destinationDir string) error {
 	rawManifest, err := di.Image.RawManifest()
 	if err != nil {
 		return fmt.Errorf("failed to get raw manifest: %w", err)

@@ -8,10 +8,11 @@ import (
 
 func NewCmdRemove() *cobra.Command {
 	var removeCommand = &cobra.Command{
-		Use:   "remove [image ref]",
-		Short: "Remove locally stored image",
-		Long:  ``,
-		Args:  cobra.ExactArgs(1),
+		Use:     "rm [image ref]",
+		Short:   "Remove locally stored image",
+		Long:    ``,
+		Args:    cobra.ExactArgs(1),
+		Aliases: []string{"delete"},
 		Run: func(cmd *cobra.Command, args []string) {
 			src := TheAppConfig.Override(args[0])
 			opts := []transporter.Option{
