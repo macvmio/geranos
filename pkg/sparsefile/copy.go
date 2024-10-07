@@ -1,29 +1,24 @@
 package sparsefile
 
-import "io"
+import (
+	"io"
+)
+
+const maxBufSize = 64 * 1024
 
 func Copy(dst io.WriteSeeker, src io.Reader) (written int64, skipped int64, err error) {
 	return copySparseBuffer(dst, src, nil)
 }
 
-func allZeroes(p []byte, n int) bool {
-	for _, v := range p[:n] {
-		if v != 0 {
-			return false
-		}
-	}
-	return true
-}
-
 func copySparseBuffer(dst io.WriteSeeker, src io.Reader, buf []byte) (written int64, skipped int64, err error) {
 	if buf == nil {
-		size := 64 * 1024
+		size := maxBufSize
 		buf = make([]byte, size)
 	}
 	var deferred int64
 	for {
 		nr, er := src.Read(buf)
-		if er == nil && allZeroes(buf, nr) {
+		if er == nil && isAllZeroes(buf[:nr]) {
 			deferred += int64(nr)
 			continue
 		}

@@ -11,7 +11,7 @@ type Writer struct {
 }
 
 func (w *Writer) Write(p []byte) (n int, err error) {
-	if allZeroes(p, len(p)) {
+	if isAllZeroes(p) {
 		w.deferred += int64(len(p))
 		return len(p), nil
 	}
