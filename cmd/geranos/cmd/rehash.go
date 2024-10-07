@@ -13,7 +13,9 @@ func NewCmdRehash() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			src := TheAppConfig.Override(args[0])
-			return transporter.Rehash(src, transporter.WithContext(cmd.Context()))
+			return transporter.Rehash(src,
+				transporter.WithContext(cmd.Context()),
+				transporter.WithImagesPath(TheAppConfig.ImagesDirectory))
 		},
 	}
 
