@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/macvmio/geranos/pkg/dirimage"
 	"github.com/macvmio/geranos/pkg/duplicator"
 	"github.com/macvmio/geranos/pkg/filesegment"
@@ -21,8 +20,6 @@ import (
 	"path/filepath"
 	"strings"
 )
-
-const ConfigMediaType = types.MediaType("application/online.jarosik.tomasz.v1.config+json")
 
 type Mapper struct {
 	rootDir  string
