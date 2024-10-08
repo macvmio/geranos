@@ -8,13 +8,10 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/macvmio/geranos/pkg/dirimage"
 	"github.com/macvmio/geranos/pkg/duplicator"
-	"github.com/macvmio/geranos/pkg/filesegment"
 	"runtime"
 	"slices"
 
 	"github.com/macvmio/geranos/pkg/sketch"
-	"github.com/macvmio/geranos/pkg/sparsefile"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -49,39 +46,6 @@ func (lm *Mapper) refToDir(ref name.Reference) string {
 		refStr = strings.ReplaceAll(refStr, ":", "@")
 	}
 	return filepath.Join(lm.rootDir, refStr)
-}
-
-func (lm *Mapper) writeToSegment(destinationDir string, segment *filesegment.Descriptor, src io.ReadCloser) (written int64, skipped int64, err error) {
-	f, err := filesegment.NewWriter(destinationDir, segment)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	defer func(f *os.File) {
-		err := f.Close()
-		if err != nil {
-			fmt.Printf("error while closing file %v, got %v", segment.Filename(), err)
-		}
-	}(f)
-
-	written, skipped, err = sparsefile.Copy(f, src)
-	if written+skipped != segment.Length() {
-		return written, skipped, fmt.Errorf("invalid numer of bytes written+skipped: segment length: %d, written+skipped: %d", segment.Length(), written+skipped)
-	}
-	return written, skipped, err
-}
-
-func (lm *Mapper) writeLayer(destinationDir string, segment *filesegment.Descriptor, layer v1.Layer) (written int64, skipped int64, err error) {
-	if layer == nil {
-		return 0, 0, errors.New("nil layer provided")
-	}
-
-	rc, err := layer.Uncompressed()
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to access uncompressed layer: %w", err)
-	}
-	defer rc.Close()
-	return lm.writeToSegment(destinationDir, segment, rc)
 }
 
 func (lm *Mapper) WriteIfNotPresent(ctx context.Context, img v1.Image, ref name.Reference) error {
