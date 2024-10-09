@@ -30,7 +30,7 @@ func writeToSegment(destinationDir string, segment *filesegment.Descriptor, src 
 		}
 	}(f)
 
-	written, skipped, err = sparsefile.Copy(f, src)
+	written, skipped, err = sparsefile.Overwrite(f, src)
 	if written+skipped != segment.Length() {
 		return written, skipped, fmt.Errorf("invalid numer of bytes written+skipped: segment length: %d, written+skipped: %d", segment.Length(), written+skipped)
 	}
@@ -62,7 +62,13 @@ func truncateFiles(destinationDir string, segmentDescriptors []*filesegment.Desc
 	}
 
 	for filename, size := range fileSizesMap {
-		err := os.Truncate(filepath.Join(destinationDir, filename), size)
+		fpath := filepath.Join(destinationDir, filename)
+		f, err := os.OpenFile(fpath, os.O_CREATE|os.O_RDWR, 0644)
+		if err != nil {
+			return fmt.Errorf("error opening file '%s': %w", filename, err)
+		}
+		defer f.Close()
+		err = os.Truncate(fpath, size)
 		if err != nil {
 			return fmt.Errorf("error while truncating file '%v': %w", filename, err)
 		}
@@ -99,6 +105,13 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 	}
 	bytesTotal := di.Length()
 	sendProgressUpdate(opts.progress, 0, bytesTotal)
+
+	// Create & truncate the files to correct sizes, so we only have to overwrite parts that are different
+	err := truncateFiles(destinationDir, di.segmentDescriptors)
+	if err != nil {
+		return err
+	}
+
 	jobs := make(chan Job, opts.workersCount)
 	g, ctx := errgroup.WithContext(ctx)
 	layerOpts := []filesegment.LayerOpt{filesegment.WithLogFunction(opts.printf)}
@@ -108,7 +121,7 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 				atomic.AddInt64(&di.BytesReadCount, job.Descriptor.Length())
 				sendProgressUpdate(opts.progress, di.BytesReadCount, bytesTotal)
 				if filesegment.Matches(&job.Descriptor, destinationDir, layerOpts...) {
-					opts.printf("existing layer: %v\n", &job.Descriptor)
+					opts.printf("existing layer: %v matches %v\n", &job.Descriptor, job.Descriptor)
 					continue
 				}
 
@@ -147,12 +160,7 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 		return nil
 	})
 
-	err := g.Wait()
-	if err != nil {
-		return err
-	}
-
-	err = truncateFiles(destinationDir, di.segmentDescriptors)
+	err = g.Wait()
 	if err != nil {
 		return err
 	}
