@@ -82,7 +82,7 @@ Replace `/Users/yourusername` with your actual username or the path where Curie 
 To pull a macOS VM image from an OCI registry:
 
 ```bash
-geranos pull ghcr.io/macvmio/geranos:base-15.0.1
+geranos pull ghcr.io/macvmio/vm-image:macos-15.0.1-base
 ```
 
 This command downloads the VM image while optimizing bandwidth and disk usage.
@@ -92,7 +92,7 @@ This command downloads the VM image while optimizing bandwidth and disk usage.
 After pulling the image, run it using Curie:
 
 ```bash
-curie run ghcr.io/macvmio/geranos:base-15.0.1
+curie run ghcr.io/macvmio/vm-image:macos-15.0.1-base
 ```
 
 ### Available Commands
@@ -131,7 +131,7 @@ geranos [command] --help
 - **List remote images**
   
   ```bash
-  geranos remote images ghcr.io/macvmio/geranos
+  geranos remote images ghcr.io/macvmio/vm-image
   ```
 
 - **Push an Image to a Registry:**
