@@ -13,65 +13,68 @@ import (
 	"testing"
 )
 
+const testManifestName = ".oci.test.json"
+
+func prepare5CloneCandidatesWith10Layers(t *testing.T, rootDir string) []*filesegment.Descriptor {
+	t.Helper()
+
+	descriptors := make([]*filesegment.Descriptor, 0)
+	for i := 0; i < 5; i++ {
+		localDir := filepath.Join(rootDir, fmt.Sprintf("v%d", i))
+		err := os.MkdirAll(localDir, os.ModePerm)
+		require.NoError(t, err)
+
+		// Create fake files
+		err = os.WriteFile(filepath.Join(localDir, "disk.img"), []byte("0123456789"), 0o755)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(localDir, "disk2.img"), []byte("0123456789"), 0o755)
+		require.NoError(t, err)
+
+		img, err := dirimage.Read(context.Background(), localDir, dirimage.WithChunkSize(1))
+		require.NoError(t, err)
+		// Convert manifest layers to filesegment.Descriptor
+		manifest, err := img.Manifest()
+		require.NoError(t, err)
+		for _, d := range manifest.Layers {
+			fDescriptor, err := filesegment.ParseDescriptor(d)
+			require.NoError(t, err)
+			descriptors = append(descriptors, fDescriptor)
+		}
+		manifestBytes, err := img.RawManifest()
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(localDir, testManifestName), manifestBytes, 0o777)
+		require.NoError(t, err)
+	}
+	return descriptors
+}
+
+func makeManifestFromSegments(seg ...*filesegment.Descriptor) v1.Manifest {
+	m := v1.Manifest{Layers: make([]v1.Descriptor, 0)}
+	for _, s := range seg {
+		m.Layers = append(m.Layers, v1.Descriptor{
+			MediaType:   s.MediaType(),
+			Size:        0,
+			Digest:      s.Digest(),
+			Annotations: s.Annotations(),
+		})
+	}
+	return m
+}
+
 func TestDefaultSketchConstructor_ConstructConstruct(t *testing.T) {
-	const layersCount = 10
-	const testManifestName = ".oci.test.json"
-	prepare5CloneCandidatesWith10Layers := func(rootDir string) []*filesegment.Descriptor {
-		descriptors := make([]*filesegment.Descriptor, 0)
-		for i := 0; i < 5; i++ {
-			localDir := filepath.Join(rootDir, fmt.Sprintf("v%d", i))
-			err := os.MkdirAll(localDir, os.ModePerm)
-			require.NoError(t, err)
-
-			// Create fake files
-			err = os.WriteFile(filepath.Join(localDir, "disk.img"), []byte("0123456789"), 0o755)
-			require.NoError(t, err)
-			err = os.WriteFile(filepath.Join(localDir, "disk2.img"), []byte("0123456789"), 0o755)
-			require.NoError(t, err)
-
-			img, err := dirimage.Read(context.Background(), localDir, dirimage.WithChunkSize(1))
-			require.NoError(t, err)
-			// Convert manifest layers to filesegment.Descriptor
-			manifest, err := img.Manifest()
-			require.NoError(t, err)
-			for _, d := range manifest.Layers {
-				fDescriptor, err := filesegment.ParseDescriptor(d)
-				require.NoError(t, err)
-				descriptors = append(descriptors, fDescriptor)
-			}
-			manifestBytes, err := img.RawManifest()
-			require.NoError(t, err)
-			err = os.WriteFile(filepath.Join(localDir, testManifestName), manifestBytes, 0o777)
-			require.NoError(t, err)
-		}
-		return descriptors
-	}
-
-	makeManifest := func(seg ...*filesegment.Descriptor) v1.Manifest {
-		m := v1.Manifest{Layers: make([]v1.Descriptor, 0)}
-		for _, s := range seg {
-			m.Layers = append(m.Layers, v1.Descriptor{
-				MediaType:   s.MediaType(),
-				Size:        0,
-				Digest:      s.Digest(),
-				Annotations: s.Annotations(),
-			})
-		}
-		return m
-	}
 
 	tests := []struct {
 		name                   string
 		prepareManifest        func(ds []*filesegment.Descriptor) v1.Manifest
 		bytesClonedCount       int64
 		matchedSegmentsCount   int64
-		prepareCloneCandidates func(rootDir string) []*filesegment.Descriptor
+		prepareCloneCandidates func(t *testing.T, rootDir string) []*filesegment.Descriptor
 		expectedErr            error
 	}{
 		{
 			name: "successful construct of single recipe",
 			prepareManifest: func(ds []*filesegment.Descriptor) v1.Manifest {
-				return makeManifest(filesegment.NewDescriptor("disk.img", 0, 1, ds[0].Digest()))
+				return makeManifestFromSegments(filesegment.NewDescriptor("disk.img", 0, 1, ds[0].Digest()))
 			},
 			bytesClonedCount:       2,
 			matchedSegmentsCount:   1,
@@ -81,7 +84,7 @@ func TestDefaultSketchConstructor_ConstructConstruct(t *testing.T) {
 		{
 			name: "successful construct of all file recipes",
 			prepareManifest: func(ds []*filesegment.Descriptor) v1.Manifest {
-				return makeManifest(
+				return makeManifestFromSegments(
 					filesegment.NewDescriptor("disk.img", 0, 2, ds[1].Digest()),
 					filesegment.NewDescriptor("disk.img", 3, 4, ds[2].Digest()),
 					filesegment.NewDescriptor("disk2.img", 0, 10, ds[0].Digest()),
@@ -96,7 +99,7 @@ func TestDefaultSketchConstructor_ConstructConstruct(t *testing.T) {
 		{
 			name: "successful construct from best clone",
 			prepareManifest: func(ds []*filesegment.Descriptor) v1.Manifest {
-				return makeManifest(
+				return makeManifestFromSegments(
 					filesegment.NewDescriptor("disk.img", 0, 1, ds[0].Digest()),
 					filesegment.NewDescriptor("disk.img", 2, 3, ds[1].Digest()),
 					filesegment.NewDescriptor("disk.img", 4, 5, ds[2].Digest()),
@@ -117,14 +120,12 @@ func TestDefaultSketchConstructor_ConstructConstruct(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rootDir, err := os.MkdirTemp("", "sketch_construct")
-			assert.NoError(t, err)
-			defer os.RemoveAll(rootDir) // Cleanup after the test
+			rootDir := t.TempDir()
 
 			sc := NewSketcher(rootDir, testManifestName)
 
 			// Call the prepare function to set up clone candidates
-			descriptors := tt.prepareCloneCandidates(sc.rootDirectory)
+			descriptors := tt.prepareCloneCandidates(t, sc.rootDirectory)
 			manifest := tt.prepareManifest(descriptors)
 
 			bytesClonedCount, matchedSegmentsCount, err := sc.Sketch(filepath.Join(rootDir, "some/dir"), manifest)
@@ -346,4 +347,44 @@ func TestSketchConstructor_ComputeScore(t *testing.T) {
 			assert.Equal(t, tt.expectedScore, score)
 		})
 	}
+}
+
+func TestSketch_DoesNotOverwriteExistingFile(t *testing.T) {
+	const existingFileName = "disk.img"
+	const existingFileContent = "original content"
+
+	prepareCloneCandidate := func(rootDir string) []*filesegment.Descriptor {
+		return prepare5CloneCandidatesWith10Layers(t, rootDir)
+	}
+
+	prepareManifest := func(descriptor *filesegment.Descriptor) v1.Manifest {
+		return makeManifestFromSegments(descriptor)
+	}
+
+	// Set up temporary directory for the test
+	rootDir := t.TempDir()
+
+	// Create a directory to simulate the existing file
+	destDir := filepath.Join(rootDir, "some", "dir")
+	err := os.MkdirAll(destDir, os.ModePerm)
+	require.NoError(t, err)
+
+	// Create the existing file with specific content
+	existingFilePath := filepath.Join(destDir, existingFileName)
+	err = os.WriteFile(existingFilePath, []byte(existingFileContent), 0o755)
+	require.NoError(t, err)
+
+	// Create a Sketcher and call Sketch
+	sc := NewSketcher(rootDir, testManifestName)
+	descriptors := prepareCloneCandidate(sc.rootDirectory)
+	manifest := prepareManifest(descriptors[0])
+
+	// Run Sketch and check that the existing file is not overwritten
+	_, _, err = sc.Sketch(destDir, manifest)
+	assert.NoError(t, err)
+
+	// Verify that the existing file content remains unchanged
+	content, err := os.ReadFile(existingFilePath)
+	require.NoError(t, err)
+	assert.Equal(t, existingFileContent, string(content), "The existing file should not be overwritten")
 }

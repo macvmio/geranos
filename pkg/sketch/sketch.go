@@ -5,6 +5,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/macvmio/geranos/pkg/duplicator"
 	"github.com/macvmio/geranos/pkg/filesegment"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -99,6 +100,9 @@ func (sc *Sketcher) Sketch(dir string, manifest v1.Manifest) (bytesClonedCount i
 	}
 
 	for _, fr := range fileBlueprints {
+		if fileExists(filepath.Join(dir, fr.Filename)) {
+			continue
+		}
 		// we will process each FR exactly once
 		// fr can easily have 1000 layers,
 		// each manifest can also have more than 1000 layers
@@ -126,6 +130,7 @@ func (sc *Sketcher) Sketch(dir string, manifest v1.Manifest) (bytesClonedCount i
 		if src == dest {
 			continue
 		}
+		log.Printf("cloning file %s -> %s\n", src, dest)
 		err = duplicator.CloneFile(src, dest)
 		if err != nil {
 			return bytesClonedCount, matchedSegmentsCount, fmt.Errorf("unable to clone source file '%v' to destination '%v': %w", src, dest, err)
