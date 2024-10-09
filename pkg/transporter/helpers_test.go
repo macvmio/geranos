@@ -113,7 +113,7 @@ func modifyByteInFileToEnsureDifferent(t *testing.T, filePath string, offset int
 	t.Helper()
 
 	// Open the file for reading and writing. The file must exist.
-	f, err := os.OpenFile(filePath, os.O_RDWR, 0666)
+	f, err := os.OpenFile(filePath, os.O_RDWR, 0644)
 	require.NoError(t, err, "opening file failed")
 	defer f.Close()
 

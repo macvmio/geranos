@@ -8,7 +8,7 @@ import (
 )
 
 func NewWriter(dir string, d *Descriptor) (*os.File, error) {
-	f, err := os.OpenFile(filepath.Join(dir, d.filename), os.O_RDWR|os.O_CREATE, 0666)
+	f, err := os.OpenFile(filepath.Join(dir, d.filename), os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("unable to open file '%v': %w", filepath.Join(dir, d.filename), err)
 	}
