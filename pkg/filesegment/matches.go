@@ -1,6 +1,8 @@
 package filesegment
 
-import "path/filepath"
+import (
+	"path/filepath"
+)
 
 func Matches(d *Descriptor, dir string, opt ...LayerOpt) bool {
 	fname := filepath.Join(dir, d.filename)
@@ -9,11 +11,5 @@ func Matches(d *Descriptor, dir string, opt ...LayerOpt) bool {
 		return false
 	}
 	digest, err := l.Digest()
-	if err != nil {
-		return false
-	}
-	if digest == d.digest {
-		return true
-	}
-	return false
+	return err == nil && digest == d.digest
 }
