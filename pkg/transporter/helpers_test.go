@@ -12,14 +12,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
 // prepareRegistryWithLogging wraps the original prepareRegistry function
 // to add logging of requests.
+var gmutex sync.Mutex
+
 func prepareRegistryWithRecorder(rec *[]http.Request) http.Handler {
 	originalHandler := prepareRegistry() // Assuming this is your function that sets up the registry
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gmutex.Lock()
+		defer gmutex.Unlock()
 		*rec = append(*rec, *r)
 		// Call the original handler
 		originalHandler.ServeHTTP(w, r)
