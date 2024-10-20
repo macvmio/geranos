@@ -13,7 +13,7 @@ func List(opt ...Option) error {
 		return fmt.Errorf("unable to list images: %w", err)
 	}
 	// Print header
-	fmt.Printf("%-50s %-15s %-15s %-12s %-10s\n", "REPOSITORY", "TAG", "SIZE", "DISK USAGE", "MANIFEST")
+	fmt.Printf("%-45s %-25s %-15s %-12s %-10s\n", "REPOSITORY", "TAG", "SIZE", "DISK USAGE", "MANIFEST")
 
 	for _, p := range props {
 		manifestStatus := "Missing"
