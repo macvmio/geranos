@@ -8,13 +8,11 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/macvmio/geranos/pkg/dirimage"
 	"github.com/macvmio/geranos/pkg/duplicator"
-	"runtime"
-	"slices"
-
 	"github.com/macvmio/geranos/pkg/sketch"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -49,15 +47,15 @@ func (lm *Mapper) refToDir(ref name.Reference) string {
 }
 
 func (lm *Mapper) WriteIfNotPresent(ctx context.Context, img v1.Image, ref name.Reference) error {
-	rawOriginManifest, err := img.RawManifest()
+	originalDigest, err := img.Digest()
 	if err != nil {
 		return fmt.Errorf("failed to read origin manifest: %w", err)
 	}
 	localImg, err := dirimage.Read(ctx, lm.refToDir(ref), dirimage.WithOmitLayersContent())
 	if err == nil {
-		rawLocalManifest, err := localImg.RawManifest()
-		if err == nil && slices.Equal(rawOriginManifest, rawLocalManifest) {
-			fmt.Println("skipped writing because manifests are the same")
+		localDigest, err := localImg.Digest()
+		if err == nil && localDigest == originalDigest {
+			fmt.Println("skipped writing because digests are the same")
 			return nil
 		}
 	}
