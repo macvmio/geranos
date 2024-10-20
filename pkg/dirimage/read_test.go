@@ -483,7 +483,7 @@ func TestRead(t *testing.T) {
 		require.NoError(t, err, "Failed to get manifest from image")
 		assert.Equal(t, len(manifest.Layers), len(manifestFromImage.Layers), "Number of layers should match")
 
-		assert.Equal(t, int64(0), img.BytesReadCount)
+		assert.Equal(t, int64(0), img.BytesReadCount.Load())
 	})
 
 	t.Run("TestReadInvalidDirectory", func(t *testing.T) {
@@ -616,7 +616,7 @@ func TestReadWriteReadOmitLayers(t *testing.T) {
 	require.NoError(t, err, "Failed to read image from source directory")
 	require.NotNil(t, img1, "img1 should not be nil")
 
-	assert.Equal(t, int64(96), img1.BytesReadCount)
+	assert.Equal(t, int64(96), img1.BytesReadCount.Load())
 
 	// Get the manifest and digest from img1
 	_, err = img1.Image.Manifest()
@@ -633,7 +633,7 @@ func TestReadWriteReadOmitLayers(t *testing.T) {
 	img2, err := Read(ctx, destDir, WithOmitLayersContent())
 	require.NoError(t, err, "Failed to read image from destination directory with omitLayersContent=true")
 	require.NotNil(t, img2, "img2 should not be nil")
-	assert.Equal(t, int64(0), img2.BytesReadCount)
+	assert.Equal(t, int64(0), img2.BytesReadCount.Load())
 
 	// Get the manifest and digest from img2
 	//manifest2, err := img2.Image.Manifest()

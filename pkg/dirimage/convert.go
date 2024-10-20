@@ -3,6 +3,7 @@ package dirimage
 import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/macvmio/geranos/pkg/filesegment"
+	"sync/atomic"
 )
 
 func Convert(img v1.Image) (*DirImage, error) {
@@ -21,7 +22,7 @@ func Convert(img v1.Image) (*DirImage, error) {
 	}
 	return &DirImage{
 		Image:              img,
-		BytesReadCount:     0,
+		BytesReadCount:     atomic.Int64{},
 		directory:          "",
 		segmentDescriptors: segmentDescriptors,
 	}, nil

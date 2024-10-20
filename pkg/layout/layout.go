@@ -103,9 +103,9 @@ func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) e
 	}
 
 	st = Statistics{}
-	st.BytesWrittenCount.Store(convertedImage.BytesWrittenCount)
-	st.BytesSkippedCount.Store(convertedImage.BytesSkippedCount)
-	st.BytesReadCount.Store(convertedImage.BytesReadCount)
+	st.BytesWrittenCount.Store(convertedImage.BytesWrittenCount.Load())
+	st.BytesSkippedCount.Store(convertedImage.BytesSkippedCount.Load())
+	st.BytesReadCount.Store(convertedImage.BytesReadCount.Load())
 	lm.stats.Add(&st)
 	return nil
 }
@@ -117,7 +117,7 @@ func (lm *Mapper) Rehash(ctx context.Context, ref name.Reference) error {
 		return fmt.Errorf("unable to read dirimage: %w", err)
 	}
 	st := Statistics{}
-	st.BytesReadCount.Store(img.BytesReadCount)
+	st.BytesReadCount.Store(img.BytesReadCount.Load())
 	lm.stats.Add(&st)
 	return img.WriteConfigAndManifest(refStr)
 }
@@ -129,7 +129,7 @@ func (lm *Mapper) Read(ctx context.Context, ref name.Reference) (v1.Image, error
 		return nil, fmt.Errorf("unable to read dirimage: %w", err)
 	}
 	st := Statistics{}
-	st.BytesReadCount.Store(img.BytesReadCount)
+	st.BytesReadCount.Store(img.BytesReadCount.Load())
 	lm.stats.Add(&st)
 	return img, err
 }

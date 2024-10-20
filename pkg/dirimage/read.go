@@ -225,10 +225,12 @@ func Read(ctx context.Context, dir string, opt ...Option) (*DirImage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare image: %w", err)
 	}
-	return &DirImage{
+	res := &DirImage{
 		Image:          img,
-		BytesReadCount: bytesReadCount,
+		BytesReadCount: atomic.Int64{},
 		directory:      dir,
 		// TODO: Descriptors
-	}, nil
+	}
+	res.BytesReadCount.Store(bytesReadCount)
+	return res, nil
 }

@@ -571,7 +571,7 @@ func TestLayoutMapper_Rehash(t *testing.T) {
 		require.NoError(t, lm.Rehash(ctx, ref))
 
 		// Verify stats
-		assert.Equal(t, img.BytesReadCount, lm.Stats().BytesReadCount)
+		assert.Equal(t, img.BytesReadCount.Load(), lm.Stats().BytesReadCount)
 	})
 
 	t.Run("InvalidImageDirectory", func(t *testing.T) {

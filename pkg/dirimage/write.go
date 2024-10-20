@@ -12,7 +12,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"syscall"
 )
 
@@ -118,8 +117,8 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 	for w := 0; w < opts.workersCount; w++ {
 		g.Go(func() error {
 			for job := range jobs {
-				atomic.AddInt64(&di.BytesReadCount, job.Descriptor.Length())
-				sendProgressUpdate(opts.progress, di.BytesReadCount, bytesTotal)
+				di.BytesReadCount.Add(job.Descriptor.Length())
+				sendProgressUpdate(opts.progress, di.BytesReadCount.Load(), bytesTotal)
 				if filesegment.Matches(&job.Descriptor, destinationDir, layerOpts...) {
 					opts.printf("existing layer: %v matches %v\n", &job.Descriptor, job.Descriptor)
 					continue
@@ -129,8 +128,8 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 					written, skipped, err := writeLayer(destinationDir, &job.Descriptor, job.Layer)
 					opts.printf("downloaded layer: %v, written=%d, skipped=%d\n", &job.Descriptor, written, skipped)
 
-					atomic.AddInt64(&di.BytesWrittenCount, written)
-					atomic.AddInt64(&di.BytesSkippedCount, skipped)
+					di.BytesWrittenCount.Add(written)
+					di.BytesSkippedCount.Add(skipped)
 					if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
 						continue
 					}
