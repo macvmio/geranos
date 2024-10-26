@@ -55,34 +55,6 @@ func fileExists(filePath string) bool {
 	return !info.IsDir()
 }
 
-func (sc *Sketcher) findBestCloneCandidate(fileBlueprints []*fileBlueprint, cloneCandidates []*cloneCandidate) (*cloneCandidate, error) {
-	var bestCloneCandidate *cloneCandidate
-	bestScore := 0
-
-	for _, fr := range fileBlueprints {
-		// Create a map of digest segments for each file blueprint
-		segmentsDigestMap := make(map[string]filesegment.Descriptor)
-		for _, seg := range fr.Segments {
-			segmentsDigestMap[seg.Digest().String()] = *seg
-		}
-
-		// Find the best matching candidate
-		for _, cc := range cloneCandidates {
-			score := sc.computeScore(segmentsDigestMap, cc)
-			if score > bestScore {
-				bestScore = score
-				bestCloneCandidate = cc
-			}
-		}
-	}
-
-	if bestCloneCandidate == nil {
-		return nil, fmt.Errorf("no matching clone candidate found")
-	}
-
-	return bestCloneCandidate, nil
-}
-
 func (sc *Sketcher) Sketch(dir string, manifest v1.Manifest) (bytesClonedCount int64, matchedSegmentsCount int64, err error) {
 
 	fileBlueprints, err := createBlueprintsFromManifest(manifest)
@@ -153,7 +125,7 @@ func (sc *Sketcher) findCloneCandidates() ([]*cloneCandidate, error) {
 	go func() {
 		filepath.Walk(sc.rootDirectory, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
-				return fmt.Errorf("error accessing path %q: %w\n", path, err)
+				return fmt.Errorf("error accessing path %q: %w", path, err)
 			}
 			if !info.IsDir() && info.Name() == sc.manifestFileName {
 				jobs <- Job{path: path}

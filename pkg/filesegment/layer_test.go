@@ -5,6 +5,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
 )
@@ -43,6 +44,7 @@ func TestLayer_AppendLayers(t *testing.T) {
 
 	ii := empty.Index
 	_, err = layout.Write(tempDir, ii)
+	require.NoError(t, err)
 	l1, err := layout.FromPath(tempDir)
 	if err != nil {
 		t.Errorf("unable to load layout from path, got %v", err)
@@ -105,7 +107,7 @@ func TestLayer_Functionality(t *testing.T) {
 
 	// Testing Append to empty Image
 	img := empty.Image
-	img, err = mutate.AppendLayers(img, layer)
+	_, err = mutate.AppendLayers(img, layer)
 	if err != nil {
 		t.Errorf("unable to append layer: %v", err)
 	}

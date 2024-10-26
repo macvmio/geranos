@@ -113,12 +113,6 @@ func TestPrepareLayers(t *testing.T) {
 		}
 
 		assert.Equal(t, expectedLayerCount, len(layers), "Expected %d layers, got %d", expectedLayerCount, len(layers))
-
-		// Verify that layers implement v1.Layer interface
-		for _, l := range layers {
-			_, ok := l.(v1.Layer)
-			assert.True(t, ok, "Layer does not implement v1.Layer interface")
-		}
 	})
 
 	t.Run("WithOmitLayersContent", func(t *testing.T) {

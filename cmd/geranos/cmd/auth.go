@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 	"github.com/docker/cli/cli/config"
 	"github.com/docker/cli/cli/config/types"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -21,8 +20,8 @@ import (
 func NewCmdAuthLogin() *cobra.Command {
 	var opts loginOptions
 
-	eg := fmt.Sprintf(`  # Log in to oci.jarosik.online
-  geranos login oci.jarosik.online -u <usernamne> -p <password>`)
+	eg := `  # Log in to oci.jarosik.online
+  geranos login oci.jarosik.online -u <usernamne> -p <password>`
 
 	cmd := &cobra.Command{
 		Use:     "login [OPTIONS] [SERVER]",
@@ -95,8 +94,8 @@ func login(opts loginOptions) error {
 
 // NewCmdAuthLogout creates a new `crane auth logout` command.
 func NewCmdAuthLogout() *cobra.Command {
-	eg := fmt.Sprintf(`  # Log out of oci.jarosik.online
-  geranos logout oci.jarosik.online`)
+	eg := `  # Log out of oci.jarosik.online
+  geranos logout oci.jarosik.online`
 
 	cmd := &cobra.Command{
 		Use:     "logout [SERVER]",

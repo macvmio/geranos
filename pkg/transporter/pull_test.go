@@ -142,6 +142,7 @@ func TestPullAndPush_pullSmallerImageAfterPullingLargerImage(t *testing.T) {
 	err = Pull(ref2, opts...)
 	require.NoError(t, err)
 	err = Pull(ref1, opts...)
+	require.NoError(t, err)
 
 	hash1After := hashFromFile(t, filepath.Join(tempDir, "images", ref1, "disk.img"))
 	hash2After := hashFromFile(t, filepath.Join(tempDir, "images", ref2, "disk.img"))
@@ -219,7 +220,7 @@ func TestPull_WithForceOption(t *testing.T) {
 		require.NoError(t, err)
 		clear(recordedRequests)
 
-		nonForcedOpts := append(opts)
+		nonForcedOpts := opts
 
 		// Pull the same image again without force
 		err = Pull(ref, nonForcedOpts...)

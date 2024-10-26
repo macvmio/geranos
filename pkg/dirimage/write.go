@@ -98,10 +98,6 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 		Descriptor filesegment.Descriptor
 		Layer      v1.Layer
 	}
-	type JobResult struct {
-		Job Job
-		err error
-	}
 	bytesTotal := di.Length()
 	sendProgressUpdate(opts.progress, 0, bytesTotal)
 

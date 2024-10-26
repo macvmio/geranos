@@ -76,5 +76,6 @@ func TestConvert_ValidImage(t *testing.T) {
 	}
 
 	outImg, err := Convert(img)
+	require.NoError(t, err)
 	assert.NotNil(t, outImg)
 }

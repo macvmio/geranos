@@ -132,15 +132,13 @@ func TestLayoutMapper_Write_MustOptimizeDiskSpace(t *testing.T) {
 	err = generateRandomFile(randomFileName, 32*MB)
 	require.NoErrorf(t, err, "unable to generate file: %v", err)
 	hashBefore := hashFromFile(t, randomFileName)
-	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1"))
-	require.NoErrorf(t, err, "unable to parse reference: %v", err)
+	srcRef := mustParseRef(t, "oci.jarosik.online/testrepo/a:v1")
 	lm := NewMapper(tempDir, dirimage.WithChunkSize(chunkSize))
 	img1, err := lm.Read(ctx, srcRef)
 	require.NoErrorf(t, err, "unable to read disk image: %v", err)
 	for i := 2; i < 12; i++ {
 		dir := fmt.Sprintf("oci.jarosik.online/testrepo/a:v%d", i)
-		r, err := name.ParseReference(dir)
-		require.NoErrorf(t, err, "unable to parse reference %d: %v", i, err)
+		r := mustParseRef(t, dir)
 		err = lm.Write(ctx, img1, r)
 		require.NoErrorf(t, err, "unable to write image %d: %v", i, err)
 		err = duplicator.CloneDirectory(path.Join(testRepoDir, "a:v1"), path.Join(optimalRepoDir, fmt.Sprintf("a:v%d", i)), false)
@@ -172,8 +170,7 @@ func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 	err = generateRandomFile(path.Join(testRepoDir, "a:v1/disk.img"), 100*chunkSize)
 	require.NoErrorf(t, err, "unable to generate file: %v", err)
 
-	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1"))
-	require.NoErrorf(t, err, "unable to parse reference: %v", err)
+	srcRef := mustParseRef(t, "oci.jarosik.online/testrepo/a:v1")
 	beforeHash := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v1/disk.img"))
 	img1, err := lm.Read(ctx, srcRef)
 	require.NoErrorf(t, err, "unable to read disk image: %v", err)
@@ -219,7 +216,7 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 	err = generateRandomFile(randomFilename, 100*chunkSize)
 	require.NoErrorf(t, err, "unable to generate file: %v", err)
 
-	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1"))
+	srcRef, err := name.ParseReference("oci.jarosik.online/testrepo/a:v1")
 	require.NoErrorf(t, err, "unable to parse reference: %v", err)
 	img1, err := lm.Read(ctx, srcRef)
 	require.NoErrorf(t, err, "unable to read disk image: %v", err)
@@ -256,8 +253,7 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 	})
 	require.NoError(t, err)
 
-	destRef, err = name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v3"))
-	require.NoErrorf(t, err, "unable to parse reference %v: %v", destRef, err)
+	destRef = mustParseRef(t, "oci.jarosik.online/testrepo/a:v3")
 	err = lm.Write(ctx, img3, destRef)
 	require.NoErrorf(t, err, "unable to write image %v: %v", destRef, err)
 	assert.Equal(t, int64(20), lm.stats.BytesWrittenCount.Load())
@@ -280,7 +276,7 @@ func TestLayoutMapper_Write_MultipleConcurrentWorkers(t *testing.T) {
 	err = generateRandomFile(path.Join(testRepoDir, "a:v1/disk.img"), 200*chunkSize)
 	require.NoErrorf(t, err, "unable to generate file: %v", err)
 
-	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1"))
+	srcRef, err := name.ParseReference("oci.jarosik.online/testrepo/a:v1")
 	require.NoErrorf(t, err, "unable to parse reference: %v", err)
 	beforeHash := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v1/disk.img"))
 	img1, err := lm.Read(ctx, srcRef)
@@ -314,13 +310,12 @@ func TestLayoutMapper_Write_MustOverwriteBiggerFileIfAlreadyExist(t *testing.T) 
 	err = generateRandomFile(path.Join(testRepoDir, "a:v1/disk.img"), 10*chunkSize)
 	require.NoErrorf(t, err, "unable to generate file: %v", err)
 
-	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1"))
-	require.NoErrorf(t, err, "unable to parse reference: %v", err)
+	srcRef := mustParseRef(t, "oci.jarosik.online/testrepo/a:v1")
 	beforeHash := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v1/disk.img"))
 	img1, err := lm.Read(ctx, srcRef)
 	require.NoErrorf(t, err, "unable to read disk image: %v", err)
 
-	dstRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v2"))
+	dstRef := mustParseRef(t, "oci.jarosik.online/testrepo/a:v2")
 	err = lm.Write(ctx, img1, dstRef)
 	require.NoError(t, err)
 	hash2 := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v2/disk.img"))
@@ -337,6 +332,13 @@ func TestLayoutMapper_Write_MustOverwriteBiggerFileIfAlreadyExist(t *testing.T) 
 	assert.Equal(t, beforeHash, hash4)
 }
 
+func mustParseRef(t *testing.T, ref string) name.Reference {
+	t.Helper()
+	srcRef, err := name.ParseReference(ref)
+	require.NoErrorf(t, err, "unable to parse reference: %v", err)
+	return srcRef
+}
+
 func TestLayoutMapper_WriteIfNotPresent(t *testing.T) {
 	ctx := context.Background()
 	tempDir, err := os.MkdirTemp("", "layout-mapper-*")
@@ -351,15 +353,13 @@ func TestLayoutMapper_WriteIfNotPresent(t *testing.T) {
 	err = generateRandomFile(randomFileName, 123)
 	require.NoErrorf(t, err, "unable to generate file: %v", err)
 	//hashBefore := hashFromFile(t, randomFileName)
-	srcRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v1-origin"))
-	require.NoErrorf(t, err, "unable to parse reference: %v", err)
+	srcRef := mustParseRef(t, "oci.jarosik.online/testrepo/a:v1-origin")
 	originImg, err := NewMapper(tempDir).Read(ctx, srcRef)
 
 	// Case 1: Manifests are the same (should not trigger write)
 	t.Run("Manifests are the same", func(t *testing.T) {
 		// Write the image initially to ensure a local manifest exists
-		dstRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v2"))
-		require.NoError(t, err)
+		dstRef := mustParseRef(t, "oci.jarosik.online/testrepo/a:v2")
 		lm := NewMapper(tempDir)
 		err = lm.Write(ctx, originImg, dstRef)
 		require.NoError(t, err)
@@ -376,8 +376,7 @@ func TestLayoutMapper_WriteIfNotPresent(t *testing.T) {
 
 	// Case 2: Manifests are different (should trigger write)
 	t.Run("Manifests are different", func(t *testing.T) {
-		dstRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v3"))
-		require.NoError(t, err)
+		dstRef := mustParseRef(t, "oci.jarosik.online/testrepo/a:v3")
 		lm := NewMapper(tempDir)
 		err = lm.Write(ctx, originImg, dstRef)
 		require.NoError(t, err)
@@ -386,6 +385,7 @@ func TestLayoutMapper_WriteIfNotPresent(t *testing.T) {
 		err = generateRandomFile(randomFileName, 123)
 		require.NoErrorf(t, err, "unable to generate file: %v", err)
 		updateImage, err := lm.Read(ctx, srcRef)
+		require.NoError(t, err)
 
 		// Call WriteIfNotPresent, should perform the write since manifests are different
 		lm2 := NewMapper(tempDir)
@@ -398,7 +398,7 @@ func TestLayoutMapper_WriteIfNotPresent(t *testing.T) {
 
 	// Case 3: Local manifest does not exist (should trigger write)
 	t.Run("Local manifest is missing", func(t *testing.T) {
-		dstRef, err := name.ParseReference(fmt.Sprintf("oci.jarosik.online/testrepo/a:v5"))
+		dstRef := mustParseRef(t, "oci.jarosik.online/testrepo/a:v5")
 
 		// Call WriteIfNotPresent, should perform the write since manifests are different
 		lm2 := NewMapper(tempDir)

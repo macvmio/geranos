@@ -25,7 +25,7 @@ func overwriteBuffer(dst io.ReadWriteSeeker, src io.Reader, srcBuf, dstBuf []byt
 		if nrSrc == 0 && er1 == io.EOF {
 			break
 		}
-		nrDst, er2 := dst.Read(dstBuf[:nrSrc])
+		nrDst, _ := dst.Read(dstBuf[:nrSrc])
 		nrMin := min(nrSrc, nrDst)
 		if bytes.Equal(dstBuf[:nrMin], srcBuf[:nrMin]) {
 			dstPos += int64(nrMin)
@@ -35,9 +35,10 @@ func overwriteBuffer(dst io.ReadWriteSeeker, src io.Reader, srcBuf, dstBuf []byt
 			shiftedSrc = srcBuf[0:nrSrc]
 		}
 		// rewind dstPost
-		dstPos, er2 = dst.Seek(dstPos, io.SeekStart)
-		if er2 != nil {
-			err = er2
+		var er3 error
+		dstPos, er3 = dst.Seek(dstPos, io.SeekStart)
+		if er3 != nil {
+			err = er3
 			break
 		}
 		nw, ew := dst.Write(shiftedSrc)
