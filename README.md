@@ -77,12 +77,14 @@ images_directory: /Users/yourusername/.curie/.images
 
 Replace `/Users/yourusername` with your actual username or the path where Curie stores images.
 
+NOTE: For curie up to 3.0, you have to specify ".curie/images" (without a dot)
+
 ### Pulling a VM Image
 
 To pull a macOS VM image from an OCI registry:
 
 ```bash
-geranos pull ghcr.io/macvmio/vm-image:macos-15.0.1-base
+geranos pull ghcr.io/macvmio/macos-sonoma:14.5-agent-v1.6
 ```
 
 This command downloads the VM image while optimizing bandwidth and disk usage.
@@ -92,7 +94,7 @@ This command downloads the VM image while optimizing bandwidth and disk usage.
 After pulling the image, run it using Curie:
 
 ```bash
-curie run ghcr.io/macvmio/vm-image:macos-15.0.1-base
+curie run ghcr.io/macvmio/macos-sonoma:14.5-agent-v1.6
 ```
 
 ### Available Commands
@@ -131,7 +133,7 @@ geranos [command] --help
 - **List remote images**
   
   ```bash
-  geranos remote images ghcr.io/macvmio/vm-image
+  geranos remote images ghcr.io/macvmio/macos-sonoma
   ```
 
 - **Push an Image to a Registry:**
@@ -167,6 +169,7 @@ Geranos is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) fil
 - Integration with the upcoming [macvm.io](https://macvm.io) website.
 - Enhanced filesystem optimization features.
 - Support for additional VM formats and platforms.
+
 
 ## Contact and Support
 
