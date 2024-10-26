@@ -1,12 +1,11 @@
 module github.com/macvmio/geranos
 
-go 1.22
+go 1.23
 
 require (
 	github.com/docker/cli v26.0.0+incompatible
 	github.com/google/go-containerregistry v0.19.1
 	github.com/klauspost/compress v1.17.7
-	github.com/magiconair/properties v1.8.7
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.9.0
@@ -25,6 +24,7 @@ require (
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
