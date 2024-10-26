@@ -1,40 +1,33 @@
 package bitarray
 
-// Bitarray interface as per your request
-type Bitarray interface {
-	Set(idx int)
-	Get(idx int) bool
-	GetByte(pos int) byte
-}
-
-// bitArray is a simple implementation of the Bitarray interface.
-type bitArray struct {
+// BitArray is a simple implementation of the Bitarray interface.
+type BitArray struct {
 	data []uint8
 }
 
-// newBitArray creates a new bitArray with a given size.
-func newBitArray(size int) *bitArray {
-	return &bitArray{
+// newBitArray creates a new BitArray with a given size.
+func newBitArray(size int) *BitArray {
+	return &BitArray{
 		data: make([]uint8, (size+7)/8),
 	}
 }
 
 // Set sets the bit at idx to 1.
-func (b *bitArray) Set(idx int) {
+func (b *BitArray) Set(idx int) {
 	byteIndex := idx / 8
 	bitIndex := uint(idx % 8) // Bit position in the byte
 	b.data[byteIndex] |= 1 << bitIndex
 }
 
 // Get returns true if the bit at idx is 1.
-func (b *bitArray) Get(idx int) bool {
+func (b *BitArray) Get(idx int) bool {
 	byteIndex := idx / 8
 	bitIndex := uint(idx % 8) // Bit position in the byte
 	return (b.data[byteIndex]>>bitIndex)&1 == 1
 }
 
 // GetByte returns a byte starting from the bit at index pos*8.
-func (b *bitArray) GetByte(pos int) byte {
+func (b *BitArray) GetByte(pos int) byte {
 	return b.data[pos]
 }
 
@@ -45,7 +38,27 @@ func braillePattern(mask byte) rune {
 	return base + rune(mask)
 }
 
-func (b *bitArray) String() string {
+// Fill sets all bits up to the n-th bit to 1.
+func (b *BitArray) Fill(n int) {
+	if n <= 0 {
+		return
+	}
+	totalBits := len(b.data) * 8
+	if n > totalBits {
+		n = totalBits
+	}
+	fullBytes := n / 8
+	for i := 0; i < fullBytes; i++ {
+		b.data[i] = 0xFF
+	}
+	remainingBits := n % 8
+	if remainingBits != 0 && fullBytes < len(b.data) {
+		mask := byte((1 << remainingBits) - 1)
+		b.data[fullBytes] |= mask
+	}
+}
+
+func (b *BitArray) String() string {
 	res := make([]rune, 0)
 	res = append(res, '[')
 	for _, m := range b.data {
@@ -55,6 +68,6 @@ func (b *bitArray) String() string {
 	return string(res)
 }
 
-func New(size int) Bitarray {
+func New(size int) *BitArray {
 	return newBitArray(size)
 }
