@@ -17,16 +17,44 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
 func hashFromFile(t *testing.T, filename string) string {
+	t.Helper()
+	filename = portableFilepath(filename)
 	f, err := os.Open(filename)
 	require.NoErrorf(t, err, "unexpected error while opening a file, got %v", err)
 	defer f.Close()
 	h, _, err := v1.SHA256(f)
 	require.NoErrorf(t, err, "unable to calculate SHA256, got %v", err)
 	return h.Hex
+}
+
+// ReplaceLast replaces the last occurrence of old with new in the string s.
+func ReplaceLast(s, old, new string) string {
+	index := strings.LastIndex(s, old)
+	if index == -1 {
+		return s // old not found, return original string
+	}
+	return s[:index] + new + s[index+len(old):]
+}
+
+func portableFilepath(path string) string {
+	p := filepath.Clean(path)
+	if runtime.GOOS == OSWindows {
+		if strings.Contains(path, "@") {
+			return p
+		}
+		pos := strings.LastIndex(path, ":")
+		if pos != -1 && pos < 5 {
+			return p
+		}
+		p = ReplaceLast(p, ":", "@")
+	}
+	return p
 }
 
 func TestLayoutMapper_Read(t *testing.T) {
@@ -43,10 +71,7 @@ func TestLayoutMapper_Read(t *testing.T) {
 
 func TestLayoutMapper_Read_VariousChunkSizes(t *testing.T) {
 	hashBefore := hashFromFile(t, "testdata/vm1/disk.blob")
-	tempDir, err := os.MkdirTemp("", "oci-test-*")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
-
+	tempDir := t.TempDir()
 	lmDst := NewMapper(tempDir)
 	srcRef, err := name.ParseReference("vm1")
 	require.NoErrorf(t, err, "unable to parse source reference: %v", err)
@@ -79,6 +104,7 @@ func TestLayoutMapper_Read_VariousChunkSizes(t *testing.T) {
 // using io.CopyN for efficient copying.
 func generateRandomFile(filename string, size int64) error {
 	// Open a file for writing, creating it with 0666 permissions if it does not exist
+	filename = portableFilepath(filename)
 	file, err := os.Create(filename)
 	if err != nil {
 		return fmt.Errorf("error creating file: %w", err)
@@ -95,6 +121,7 @@ func generateRandomFile(filename string, size int64) error {
 }
 
 func appendRandomBytesToFile(filename string, numBytes int64) error {
+	filename = portableFilepath(filename)
 	// Open file in append mode. If file doesn't exist, create it with permissions 0644
 	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -114,21 +141,17 @@ func appendRandomBytesToFile(filename string, numBytes int64) error {
 
 func TestLayoutMapper_Write_MustOptimizeDiskSpace(t *testing.T) {
 	ctx := context.Background()
-	tempDir, err := os.MkdirTemp("", "optimized-disk-*")
-	if err != nil {
-		t.Fatalf("unable to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-	testRepoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
-	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), os.ModePerm)
+	tempDir := t.TempDir()
+	testRepoDir := filepath.Join(tempDir, "oci.jarosik.online", "testrepo")
+	err := os.MkdirAll(portableFilepath(filepath.Join(testRepoDir, "a:v1")), os.ModePerm)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
-	optimalRepoDir := path.Join(tempDir, "oci.jarosik.online/optimalrepo")
-	err = os.MkdirAll(path.Join(optimalRepoDir, "a:v1"), os.ModePerm)
+	optimalRepoDir := filepath.Join(tempDir, "oci.jarosik.online", "optimalrepo")
+	err = os.MkdirAll(portableFilepath(filepath.Join(optimalRepoDir, "a:v1")), os.ModePerm)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 
 	MB := int64(1024 * 1024)
 	chunkSize := MB
-	randomFileName := path.Join(testRepoDir, "a:v1/disk.img")
+	randomFileName := portableFilepath(path.Join(testRepoDir, "a:v1/disk.img"))
 	err = generateRandomFile(randomFileName, 32*MB)
 	require.NoErrorf(t, err, "unable to generate file: %v", err)
 	hashBefore := hashFromFile(t, randomFileName)
@@ -141,9 +164,10 @@ func TestLayoutMapper_Write_MustOptimizeDiskSpace(t *testing.T) {
 		r := mustParseRef(t, dir)
 		err = lm.Write(ctx, img1, r)
 		require.NoErrorf(t, err, "unable to write image %d: %v", i, err)
-		err = duplicator.CloneDirectory(path.Join(testRepoDir, "a:v1"), path.Join(optimalRepoDir, fmt.Sprintf("a:v%d", i)), false)
+		err = duplicator.CloneDirectory(portableFilepath(path.Join(testRepoDir, "a:v1")),
+			portableFilepath(path.Join(optimalRepoDir, fmt.Sprintf("a:v%d", i))), false)
 		require.NoErrorf(t, err, "unable to clone directory: %v", err)
-		assert.Equal(t, hashBefore, hashFromFile(t, filepath.Join(testRepoDir, fmt.Sprintf("a:v%d", i), "disk.img")))
+		assert.Equal(t, hashBefore, hashFromFile(t, portableFilepath(filepath.Join(testRepoDir, fmt.Sprintf("a:v%d", i), "disk.img"))))
 	}
 	for _, repo := range []string{testRepoDir, optimalRepoDir} {
 		diskUsage, err := DirectoryDiskUsage(testRepoDir)
@@ -159,11 +183,9 @@ func TestLayoutMapper_Write_MustOptimizeDiskSpace(t *testing.T) {
 
 func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 	ctx := context.Background()
-	tempDir, err := os.MkdirTemp("", "content-matches-*")
-	require.NoErrorf(t, err, "unable to create temp dir: %v", err)
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 	testRepoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
-	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), os.ModePerm)
+	err := os.MkdirAll(portableFilepath(path.Join(testRepoDir, "a:v1")), os.ModePerm)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 	const chunkSize = 10
 	lm := NewMapper(tempDir, dirimage.WithChunkSize(chunkSize))
@@ -198,21 +220,19 @@ func TestLayoutMapper_Write_MustAvoidWritingSameContent(t *testing.T) {
 	assert.Equal(t, int64(1000), lm.stats.BytesClonedCount.Load())
 	assert.Equal(t, int64(100), lm.stats.MatchedSegmentsCount.Load())
 
-	afterHash := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v3/disk.img"))
+	afterHash := hashFromFile(t, portableFilepath(path.Join(tempDir, "oci.jarosik.online/testrepo/a:v3/disk.img")))
 	assert.Equal(t, beforeHash, afterHash)
 }
 
 func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t *testing.T) {
 	ctx := context.Background()
-	tempDir, err := os.MkdirTemp("", "content-matches-*")
-	require.NoErrorf(t, err, "unable to create temp dir: %v", err)
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 	testRepoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
-	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), os.ModePerm)
+	err := os.MkdirAll(portableFilepath(path.Join(testRepoDir, "a:v1")), os.ModePerm)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 	const chunkSize = 10
 	lm := NewMapper(tempDir, dirimage.WithChunkSize(chunkSize))
-	randomFilename := path.Join(testRepoDir, "a:v1/disk.img")
+	randomFilename := portableFilepath(path.Join(testRepoDir, "a:v1/disk.img"))
 	err = generateRandomFile(randomFilename, 100*chunkSize)
 	require.NoErrorf(t, err, "unable to generate file: %v", err)
 
@@ -264,21 +284,19 @@ func TestLayoutMapper_Write_MustOnlyWriteContentThatDiffersFromAlreadyWritten(t 
 
 func TestLayoutMapper_Write_MultipleConcurrentWorkers(t *testing.T) {
 	ctx := context.Background()
-	tempDir, err := os.MkdirTemp("", "content-matches-*")
-	require.NoErrorf(t, err, "unable to create temp dir: %v", err)
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 	testRepoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
-	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), os.ModePerm)
+	err := os.MkdirAll(portableFilepath(path.Join(testRepoDir, "a:v1")), os.ModePerm)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 	logF := func(fmt string, argv ...any) {}
 	const chunkSize = 11
 	lm := NewMapper(tempDir, dirimage.WithChunkSize(chunkSize), dirimage.WithLogFunction(logF))
-	err = generateRandomFile(path.Join(testRepoDir, "a:v1/disk.img"), 200*chunkSize)
+	err = generateRandomFile(portableFilepath(path.Join(testRepoDir, "a:v1/disk.img")), 200*chunkSize)
 	require.NoErrorf(t, err, "unable to generate file: %v", err)
 
 	srcRef, err := name.ParseReference("oci.jarosik.online/testrepo/a:v1")
 	require.NoErrorf(t, err, "unable to parse reference: %v", err)
-	beforeHash := hashFromFile(t, path.Join(tempDir, "oci.jarosik.online/testrepo/a:v1/disk.img"))
+	beforeHash := hashFromFile(t, portableFilepath(path.Join(tempDir, "oci.jarosik.online/testrepo/a:v1/disk.img")))
 	img1, err := lm.Read(ctx, srcRef)
 	require.NoErrorf(t, err, "unable to read disk image: %v", err)
 
@@ -298,11 +316,9 @@ func TestLayoutMapper_Write_MultipleConcurrentWorkers(t *testing.T) {
 
 func TestLayoutMapper_Write_MustOverwriteBiggerFileIfAlreadyExist(t *testing.T) {
 	ctx := context.Background()
-	tempDir, err := os.MkdirTemp("", "content-matches-*")
-	require.NoErrorf(t, err, "unable to create temp dir: %v", err)
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 	testRepoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
-	err = os.MkdirAll(path.Join(testRepoDir, "a:v1"), os.ModePerm)
+	err := os.MkdirAll(portableFilepath(path.Join(testRepoDir, "a:v1")), os.ModePerm)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 	logF := func(fmt string, argv ...any) {}
 	const chunkSize = 5
@@ -346,7 +362,7 @@ func TestLayoutMapper_WriteIfNotPresent(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	testRepoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
-	err = os.MkdirAll(path.Join(testRepoDir, "a:v1-origin"), os.ModePerm)
+	err = os.MkdirAll(portableFilepath(path.Join(testRepoDir, "a:v1-origin")), os.ModePerm)
 	require.NoErrorf(t, err, "unable to create directory: %v", err)
 
 	randomFileName := path.Join(testRepoDir, "a:v1-origin/disk.img")
@@ -421,7 +437,7 @@ func TestLayoutMapper_Clone_SameFileDifferentNames(t *testing.T) {
 	fileContent := []byte("same file content")
 	images := make([]*dirimage.DirImage, 0)
 	for _, x := range []string{"A", "B"} {
-		imgDir := path.Join(tempDir, "tmp"+x)
+		imgDir := filepath.Join(tempDir, "tmp"+x)
 		err = os.MkdirAll(imgDir, os.ModePerm)
 		require.NoErrorf(t, err, "unable to create directory for Image A: %v", err)
 		err = os.WriteFile(filepath.Join(imgDir, fmt.Sprintf("disk%s.img", x)), fileContent, 0644)
@@ -432,7 +448,6 @@ func TestLayoutMapper_Clone_SameFileDifferentNames(t *testing.T) {
 	}
 
 	// Write Image A and Image B to the same repo (simulating clone)
-	repoDir := path.Join(tempDir, "oci.jarosik.online/testrepo")
 	lm := NewMapper(tempDir)
 
 	// Write Image A
@@ -455,12 +470,12 @@ func TestLayoutMapper_Clone_SameFileDifferentNames(t *testing.T) {
 	assert.Equal(t, 0, int(stats2.BytesWrittenCount))
 
 	// Validate that both images are present with the correct file names
-	assert.FileExists(t, filepath.Join(repoDir, "a:v1/diskA.img"))
-	assert.FileExists(t, filepath.Join(repoDir, "b:v1/diskB.img"))
+	assert.FileExists(t, filepath.Join(lm.refToDir(srcRefA), "diskA.img"))
+	assert.FileExists(t, filepath.Join(lm.refToDir(srcRefB), "diskB.img"))
 
 	// Validate that the contents of both files are still the same
-	hashAfterA := hashFromFile(t, filepath.Join(repoDir, "a:v1/diskA.img"))
-	hashAfterB := hashFromFile(t, filepath.Join(repoDir, "b:v1/diskB.img"))
+	hashAfterA := hashFromFile(t, filepath.Join(lm.refToDir(srcRefA), "diskA.img"))
+	hashAfterB := hashFromFile(t, filepath.Join(lm.refToDir(srcRefB), "diskB.img"))
 	assert.Equal(t, hashAfterA, hashAfterB, "Both files should still have the same hash after cloning")
 }
 

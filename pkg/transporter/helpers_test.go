@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -61,8 +62,16 @@ func makeFileAt(t *testing.T, filename, content string) {
 	assert.NoError(t, err)
 }
 
+func portableRef(ref string) string {
+	if runtime.GOOS == "windows" {
+		ref = strings.ReplaceAll(ref, ":", "@")
+	}
+	return ref
+}
+
 func makeTestVMAt(t *testing.T, tempDir, ref string) (sha string) {
 	t.Helper()
+	ref = portableRef(ref)
 	d := filepath.Join(tempDir, "images", ref)
 	err := os.MkdirAll(d, os.ModePerm)
 	assert.NoError(t, err)
@@ -75,6 +84,7 @@ func makeTestVMAt(t *testing.T, tempDir, ref string) (sha string) {
 
 func makeTestVMWithContent(t *testing.T, tempDir, ref string, content string) (sha string) {
 	t.Helper()
+	ref = portableRef(ref)
 	d := filepath.Join(tempDir, "images", ref)
 	err := os.MkdirAll(d, os.ModePerm)
 	assert.NoError(t, err)
@@ -104,6 +114,7 @@ func makeRandomFile(t *testing.T, fileName string, size int64) error {
 
 func makeBigTestVMAt(t *testing.T, tempDir, ref string) (sha string) {
 	t.Helper()
+	ref = portableRef(ref)
 	d := filepath.Join(tempDir, "images", ref)
 	err := os.MkdirAll(d, os.ModePerm)
 	assert.NoError(t, err)
@@ -151,6 +162,7 @@ func modifyByteInFileToEnsureDifferent(t *testing.T, filePath string, offset int
 
 func modifyBigTestVMAt(t *testing.T, tempDir, ref string, offset int64) (sha string) {
 	t.Helper()
+	ref = portableRef(ref)
 	d := filepath.Join(tempDir, "images", ref)
 	err := os.MkdirAll(d, os.ModePerm)
 	assert.NoError(t, err)
@@ -162,6 +174,7 @@ func modifyBigTestVMAt(t *testing.T, tempDir, ref string, offset int64) (sha str
 }
 
 func deleteTestVMAt(t *testing.T, tempDir, ref string) {
+	ref = portableRef(ref)
 	d := filepath.Join(tempDir, "images", ref)
 	err := os.RemoveAll(d)
 	assert.NoError(t, err)

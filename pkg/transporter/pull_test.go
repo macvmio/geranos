@@ -47,7 +47,7 @@ func TestPullAndPush_pullingAgainShouldNotDownloadAnyBlob(t *testing.T) {
 	t.Run("pulling reference for the first time", func(t *testing.T) {
 		err = Pull(ref, opts...)
 		assert.NoError(t, err)
-		shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", ref, "disk.img"))
+		shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", portableRef(ref), "disk.img"))
 		assert.Equal(t, shaBefore, shaAfter)
 		assert.Equal(t, 3, calculateAccessed(recordedRequests, "GET", "/blobs"))
 	})
@@ -56,7 +56,7 @@ func TestPullAndPush_pullingAgainShouldNotDownloadAnyBlob(t *testing.T) {
 	t.Run("pulling same reference second time", func(t *testing.T) {
 		err = Pull(ref, opts...)
 		assert.NoError(t, err)
-		shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", ref, "disk.img"))
+		shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", portableRef(ref), "disk.img"))
 		assert.Equal(t, shaBefore, shaAfter)
 
 		assert.Equal(t, 0, calculateAccessed(recordedRequests, "GET", "/blobs"))
@@ -109,7 +109,7 @@ func TestPullAndPush_multipleSlightlyDifferentTags(t *testing.T) {
 			err = Pull(ithRef, opts...)
 			require.NoError(t, err)
 			assert.Equal(t, expectedBlobDownloads[i], calculateAccessed(recordedRequests, "GET", "/blobs"))
-			checksumsDownloaded[i] = hashFromFile(t, filepath.Join(tempDir, "images", ithRef, "disk.img"))
+			checksumsDownloaded[i] = hashFromFile(t, filepath.Join(tempDir, "images", portableRef(ithRef), "disk.img"))
 			assert.Equal(t, checksumsUploaded[i], checksumsDownloaded[i])
 		}
 	})
@@ -144,8 +144,8 @@ func TestPullAndPush_pullSmallerImageAfterPullingLargerImage(t *testing.T) {
 	err = Pull(ref1, opts...)
 	require.NoError(t, err)
 
-	hash1After := hashFromFile(t, filepath.Join(tempDir, "images", ref1, "disk.img"))
-	hash2After := hashFromFile(t, filepath.Join(tempDir, "images", ref2, "disk.img"))
+	hash1After := hashFromFile(t, filepath.Join(tempDir, "images", portableRef(ref1), "disk.img"))
+	hash2After := hashFromFile(t, filepath.Join(tempDir, "images", portableRef(ref2), "disk.img"))
 
 	assert.Equal(t, hash1, hash1After)
 	assert.Equal(t, hash2, hash2After)
@@ -176,7 +176,7 @@ func TestPullAndPush_pullSameTagThatWasUpdatedOnRemote(t *testing.T) {
 		err = Pull(latestRef, opts...)
 		require.NoError(t, err)
 
-		hashesAfter[i] = hashFromFile(t, filepath.Join(tempDir, "images", latestRef, "disk.img"))
+		hashesAfter[i] = hashFromFile(t, filepath.Join(tempDir, "images", portableRef(latestRef), "disk.img"))
 	}
 	for i := 0; i < tagsCount; i++ {
 		assert.Equal(t, hashesBefore[i], hashesAfter[i])
@@ -209,7 +209,7 @@ func TestPull_WithForceOption(t *testing.T) {
 
 		// Verify that the image was written even though it already exists (Check by checking the number of requests)
 		assert.Equal(t, 3, calculateAccessed(recordedRequests, "GET", "/blobs"))
-		shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", ref, "disk.img"))
+		shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", portableRef(ref), "disk.img"))
 		assert.Equal(t, shaBefore, shaAfter)
 	})
 
@@ -228,7 +228,7 @@ func TestPull_WithForceOption(t *testing.T) {
 
 		// Ensure no blobs were downloaded since the image already exists
 		assert.Equal(t, 0, calculateAccessed(recordedRequests, "GET", "/blobs"))
-		shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", ref, "disk.img"))
+		shaAfter := hashFromFile(t, filepath.Join(tempDir, "images", portableRef(ref), "disk.img"))
 		assert.Equal(t, shaBefore, shaAfter)
 	})
 }

@@ -16,6 +16,8 @@ import (
 	"strings"
 )
 
+const OSWindows = "windows"
+
 type Mapper struct {
 	rootDir  string
 	sketcher *sketch.Sketcher
@@ -40,10 +42,19 @@ func NewMapper(rootDir string, opts ...dirimage.Option) *Mapper {
 
 func (lm *Mapper) refToDir(ref name.Reference) string {
 	refStr := ref.String()
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == OSWindows {
 		refStr = strings.ReplaceAll(refStr, ":", "@")
 	}
 	return filepath.Join(lm.rootDir, refStr)
+}
+
+func (lm *Mapper) dirToRef(dir string) (name.Reference, error) {
+	processedPath := strings.TrimPrefix(filepath.Clean(dir), lm.rootDir)
+	processedPath = filepath.ToSlash(strings.Trim(processedPath, "/\\"))
+	if runtime.GOOS == OSWindows {
+		processedPath = strings.Replace(processedPath, "@", ":", -1)
+	}
+	return name.ParseReference(processedPath, name.StrictValidation)
 }
 
 func (lm *Mapper) WriteIfNotPresent(ctx context.Context, img v1.Image, ref name.Reference) error {
@@ -207,10 +218,10 @@ func (lm *Mapper) List() ([]Properties, error) {
 		if d == nil || !d.IsDir() {
 			return nil
 		}
-		processedPath := strings.TrimPrefix(path, lm.rootDir)
-		processedPath = strings.Trim(processedPath, "/")
-		ref, err := name.ParseReference(processedPath, name.StrictValidation)
+
+		ref, err := lm.dirToRef(path)
 		if err != nil {
+			// fmt.Printf("skipping error %v\n", err)
 			return nil
 		}
 		dirSize, err := directorySize(path)
