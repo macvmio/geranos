@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"github.com/macvmio/geranos/pkg/appconfig"
 	"github.com/spf13/viper"
+	"os"
+	"path"
 )
 
 var flagConfigFile string
@@ -15,7 +17,11 @@ func initConfig() error {
 	if flagConfigFile != "" {
 		viper.SetConfigFile(flagConfigFile)
 	} else {
-		viper.AddConfigPath("$HOME/.geranos")
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("could not determine home directory: %w", err)
+		}
+		viper.AddConfigPath(path.Join(home, ".geranos"))
 		viper.AddConfigPath(".")
 		viper.SetConfigName("config")
 		viper.SetConfigType("yaml")

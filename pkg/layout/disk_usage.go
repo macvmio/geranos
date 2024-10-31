@@ -37,7 +37,11 @@ func DirectoryDiskUsage(path string) (string, error) {
 		// Parse PowerShell output to get the size in a similar format to du -sh
 		lines := strings.Split(result, "\n")
 		lastLine := strings.TrimSpace(lines[len(lines)-1])
-		sizeInBytes := strings.Fields(lastLine)[0]
+		fields := strings.Fields(lastLine)
+		sizeInBytes := "parsing error"
+		if len(fields) > 0 {
+			sizeInBytes = fields[0]
+		}
 		size, err := formatBytesToHumanReadable(sizeInBytes)
 		if err != nil {
 			return "", err

@@ -1,6 +1,9 @@
 package duplicator
 
 import (
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"unsafe"
 
@@ -9,8 +12,25 @@ import (
 
 const fsctlDuplicateExtentsToFile = 0x00094CF4
 
-// duplicateExtentsToFile is a wrapper around the FSCTL_DUPLICATE_EXTENTS_TO_FILE Windows API.
-// It clones the data blocks from the source file handle to the destination file handle.
+func CloneFileFallback(srcFile, dstFile string) error {
+	fmt.Printf("CloneFileFallback: %v -> %v\n", srcFile, dstFile)
+	src, err := os.Open(srcFile)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	dst, err := os.Create(dstFile)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, src)
+	return err
+}
+
+// duplicateExtentsToFile clones data blocks from the source file handle to the destination file handle.
 func duplicateExtentsToFile(dst, src windows.Handle, srcLength int64) error {
 	type DuplicateExtentsData struct {
 		FileHandle       windows.Handle
@@ -24,22 +44,25 @@ func duplicateExtentsToFile(dst, src windows.Handle, srcLength int64) error {
 		TargetFileOffset: 0,
 		ByteCount:        srcLength,
 	}
-	return windows.DeviceIoControl(
-		dst,
-		fsctlDuplicateExtentsToFile,
-		(*byte)(unsafe.Pointer(&data)),
-		uint32(unsafe.Sizeof(data)),
-		nil,
-		0,
-		nil,
-		nil,
+	return os.NewSyscallError("DeviceIoControl",
+		windows.DeviceIoControl(
+			dst,
+			fsctlDuplicateExtentsToFile,
+			(*byte)(unsafe.Pointer(&data)),
+			uint32(unsafe.Sizeof(data)),
+			nil,
+			0,
+			nil,
+			nil,
+		),
 	)
 }
 
 // CloneFile efficiently clones a file from srcFile to dstFile on Windows.
 func CloneFile(srcFile, dstFile string) error {
 	srcHandle, err := windows.CreateFile(windows.StringToUTF16Ptr(srcFile),
-		windows.GENERIC_READ, 0, nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
+		windows.GENERIC_READ, windows.FILE_SHARE_READ, nil,
+		windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
 	if err != nil {
 		return os.NewSyscallError("CreateFile src", err)
 	}
@@ -58,5 +81,16 @@ func CloneFile(srcFile, dstFile string) error {
 	}
 	srcFileSize := srcFileInfo.Size()
 
-	return duplicateExtentsToFile(dstHandle, srcHandle, srcFileSize)
+	// Attempt to clone using duplicate extents
+	err = duplicateExtentsToFile(dstHandle, srcHandle, srcFileSize)
+	if err != nil {
+		windows.Close(srcHandle)
+		windows.Close(dstHandle)
+		if errors.Is(err, windows.ERROR_ACCESS_DENIED) || errors.Is(err, windows.ERROR_NOT_SUPPORTED) {
+			// Fallback to traditional file copy if access is denied or operation is not supported
+			return CloneFileFallback(srcFile, dstFile)
+		}
+		return err
+	}
+	return nil
 }

@@ -11,7 +11,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"syscall"
 )
 
 // Inspired by https://github.com/google/go-containerregistry/blob/main/cmd/crane/cmd/auth.go
@@ -58,7 +57,7 @@ type loginOptions struct {
 
 func login(opts loginOptions) error {
 	if opts.passwordStdin {
-		bytePassword, err := term.ReadPassword(syscall.Stdin)
+		bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
 		if err != nil {
 			return err
 		}
