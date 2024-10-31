@@ -17,7 +17,7 @@ func prePushConcurrently(repo name.Repository, img v1.Image, opts *options) erro
 	if err != nil {
 		return fmt.Errorf("unable to extract layers from image: %w", err)
 	}
-	g, _ := errgroup.WithContext(opts.ctx)
+	g, ctx := errgroup.WithContext(opts.ctx)
 	g.SetLimit(opts.workersCount)
 
 	seen := make(map[string]bool, 0)
@@ -32,6 +32,11 @@ func prePushConcurrently(repo name.Repository, img v1.Image, opts *options) erro
 		}
 		seen[h.String()] = true
 		g.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
 			log.Printf("pushing layer: %v", h)
 			return remote.WriteLayer(repo, currentLayer, opts.remoteOptions...)
 		})
