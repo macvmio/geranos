@@ -52,15 +52,7 @@ func (pfl *Layer) DiffID() (v1.Hash, error) {
 
 // Uncompressed implements v1.Layer
 func (pfl *Layer) Uncompressed() (io.ReadCloser, error) {
-	rc := &partialFileReader{
-		filePath: pfl.filePath,
-		start:    pfl.start,
-		stop:     pfl.stop,
-		offset:   0,
-		r:        nil,
-		f:        nil,
-	}
-	return rc, nil
+	return newPartialFileReader(pfl.filePath, pfl.start, pfl.stop)
 }
 
 // Compressed implements v1.Layer
