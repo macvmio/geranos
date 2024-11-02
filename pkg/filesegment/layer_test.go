@@ -1,67 +1,85 @@
 package filesegment
 
 import (
-	"fmt"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/stretchr/testify/require"
-	"os"
+	"runtime"
 	"testing"
 )
 
+// NOTE: layout.Write(tempDir,ii) ->
+//
+//	   There is a renamer function:
+//		  if renamer != nil {
+//			open = func() (*os.File, error) { return os.CreateTemp(dir, hash.Hex) }
+//		  }
+//
+// The first problem is that it can write to same temporary file, which could be fixed by ' return os.CreateTemp(dir, hash.Hex + "*")
+// The second problem is on Windows, that renamer can't rename a file if similar file already exists
+// os.Rename() is not a atomic operation on Windows
+// This happens because layers have the same hash (which possible if layers have all zeroes)
 func TestLayer_AppendLayers(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping because layout.Write does not work correctly for same layers on Windows")
+	}
+
 	img := empty.Image
-	tempDir, err := os.MkdirTemp("", "test-image-*")
-	if err != nil {
-		t.Fatalf("unable to create temp directory, got %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	img = mutate.MediaType(img, types.OCIManifestSchema1)
+	img = mutate.ConfigMediaType(img, types.OCIConfigJSON)
 
-	for i := 0; i < 4; i++ {
-		layer1, err := NewLayer("testdata/disk.img", WithRange(int64(i*10), int64(i*10+9)))
+	tempDir := t.TempDir()
+	for i := 0; i < 8; i++ {
+		layer, err := NewLayer("testdata/disk.img", WithRange(int64(i*10), int64(i*10+9)))
+		require.NoError(t, err)
+		img, err = mutate.AppendLayers(img, layer)
 		if err != nil {
-			t.Errorf("unable to create layer out of input file from range 0-8")
-		}
-		img, err = mutate.AppendLayers(img, layer1)
-		if err != nil {
-			t.Errorf("unable to append layer1")
+			t.Errorf("unable to append layer")
 		}
 	}
-	img = mutate.MediaType(img, "vnd.tomekjarosik.geranos.image.distribution.v1")
-	img = mutate.ConfigMediaType(img, "vnd.tomekjarosik.geranos.image.distribution.v1")
+	img, err := mutate.Config(img, v1.Config{})
+	require.NoError(t, err)
 
-	rawConfig, err := img.RawConfigFile()
-	if err != nil {
-		t.Errorf("unable to read raw config file, got %v", err)
-	}
-	fmt.Printf("rawConfig=%v\n", string(rawConfig))
-	manifest, err := img.RawManifest()
-	if err != nil {
-		t.Errorf("unable to read raw manifest, got %v", err)
-	}
-	fmt.Printf("rawManifest=%v\n", string(manifest))
-
-	ii := empty.Index
+	var ii v1.ImageIndex
+	ii = empty.Index
+	ii = mutate.AppendManifests(ii, mutate.IndexAddendum{
+		Add: img,
+	})
 	_, err = layout.Write(tempDir, ii)
 	require.NoError(t, err)
-	l1, err := layout.FromPath(tempDir)
-	if err != nil {
-		t.Errorf("unable to load layout from path, got %v", err)
+}
+
+// This works compared to previous test because each layer has a different hash
+func TestLayer_AppendLayersOptimistic(t *testing.T) {
+	img := empty.Image
+	img = mutate.MediaType(img, types.OCIManifestSchema1)
+	img = mutate.ConfigMediaType(img, types.OCIConfigJSON)
+
+	tempDir := t.TempDir()
+	for i := 0; i < 8; i++ {
+		layer, err := NewLayer("testdata/disk.img", WithRange(int64(i*9), int64(i*10+9)))
+		require.NoError(t, err)
+		img, err = mutate.AppendLayers(img, layer)
+		if err != nil {
+			t.Errorf("unable to append layer")
+		}
 	}
-	err = l1.AppendImage(img)
-	if err != nil {
-		t.Errorf("append image failed, got %v", err)
-	}
+	img, err := mutate.Config(img, v1.Config{})
+	require.NoError(t, err)
+
+	var ii v1.ImageIndex
+	ii = empty.Index
+	ii = mutate.AppendManifests(ii, mutate.IndexAddendum{
+		Add: img,
+	})
+	_, err = layout.Write(tempDir, ii)
+	require.NoError(t, err)
 }
 
 func TestLayer_Functionality(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "test-image-*")
-	if err != nil {
-		t.Fatalf("unable to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
 	// Assuming testdata/disk.img exists and has content
 	layerFile := "testdata/disk.img"
 	layer, err := NewLayer(layerFile)
