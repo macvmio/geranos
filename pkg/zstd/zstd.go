@@ -33,12 +33,17 @@ func ReadCloserLevel(r io.ReadCloser, level int) io.ReadCloser {
 	go func() error {
 		// TODO(go1.14): Just defer {pw,zw,r}.Close like you'd expect.
 		// Context: https://golang.org/issue/24283
-		zw, err := zstd.NewWriter(bw, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(level)))
+		zw, err := zstd.NewWriter(bw,
+			zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(level)),
+			zstd.WithEncoderConcurrency(1),
+			zstd.WithZeroFrames(true),
+		)
 		if err != nil {
 			return pw.CloseWithError(err)
 		}
 
-		if _, err := io.Copy(zw, r); err != nil {
+		buf := make([]byte, 64*1024)
+		if _, err := io.CopyBuffer(zw, r, buf); err != nil {
 			defer r.Close()
 			defer zw.Close()
 			return pw.CloseWithError(err)
