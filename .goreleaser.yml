@@ -24,7 +24,7 @@ builds:
     goos:
       - linux
       - darwin
-# - windows - not supported yet
+      - windows
 source:
   enabled: true
 archives:
@@ -34,6 +34,9 @@ archives:
       {{- if eq .Arch "amd64" }}x86_64
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end -}}
+    format_overrides:
+      - goos: windows
+        format: zip  # Use ZIP for Windows
 checksum:
   name_template: 'checksums.txt'
 snapshot:
