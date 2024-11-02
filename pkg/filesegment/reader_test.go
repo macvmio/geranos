@@ -1,183 +1,103 @@
 package filesegment
 
 import (
-	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func TestPartialFileReaderOpen(t *testing.T) {
-	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "example")
-	if err != nil {
-		t.Fatalf("unable to create temporary file: %v", err)
-	}
-	defer os.Remove(tmpfile.Name()) // clean up
+func TestPartialFileReader(t *testing.T) {
+	// Create a temporary directory
+	tempDir := t.TempDir()
 
-	_, err = tmpfile.WriteString("Hello, world")
-	if err != nil {
-		t.Fatalf("unable to write to temporary file: %v", err)
-	}
-	tmpfile.Close()
+	// Create a temporary file with known content
+	filePath := filepath.Join(tempDir, "testfile.txt")
+	content := []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ") // 26 bytes
+	err := os.WriteFile(filePath, content, 0644)
+	require.NoError(t, err, "Failed to write test file")
 
-	// Test opening the file
-	pfr := partialFileReader{
-		filePath: tmpfile.Name(),
-		start:    0,
-		stop:     int64(len("Hello, world")),
-	}
-
-	err = pfr.open()
-	if err != nil {
-		t.Errorf("open failed: %v", err)
-	}
-
-	// Ensure file is not nil
-	if pfr.f == nil {
-		t.Errorf("file was not opened")
-	}
-}
-
-func TestPartialFileReaderRead(t *testing.T) {
-	content := "Hello, world"
-
-	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "example")
-	if err != nil {
-		t.Fatalf("unable to create temporary file: %v", err)
-	}
-	defer os.Remove(tmpfile.Name()) // clean up
-
-	_, err = tmpfile.WriteString(content)
-	if err != nil {
-		t.Fatalf("unable to write to temporary file: %v", err)
-	}
-	err = tmpfile.Close()
-	if err != nil {
-		t.Errorf("unable to clse tmpfile")
-	}
-
-	// Instantiate partialFileReader
-	pfr := partialFileReader{
-		filePath: tmpfile.Name(),
-		start:    0,
-		stop:     int64(len(content)),
-	}
-
-	buffer := make([]byte, len(content))
-	n, err := pfr.Read(buffer)
-	if err != nil && !errors.Is(err, io.EOF) {
-		t.Errorf("Read failed: %v", err)
+	// Define test cases with start and stop positions
+	testCases := []struct {
+		name        string
+		start       int64
+		stop        int64
+		expected    []byte
+		expectError bool
+	}{
+		{
+			name:     "First 10 bytes",
+			start:    0,
+			stop:     9,
+			expected: []byte("ABCDEFGHIJ"),
+		},
+		{
+			name:     "Middle 5 bytes",
+			start:    10,
+			stop:     14,
+			expected: []byte("KLMNO"),
+		},
+		{
+			name:     "Last 6 bytes",
+			start:    20,
+			stop:     25,
+			expected: []byte("UVWXYZ"),
+		},
+		{
+			name:     "Entire file",
+			start:    0,
+			stop:     25,
+			expected: content,
+		},
+		{
+			name:        "Invalid range (start > stop)",
+			start:       15,
+			stop:        10,
+			expectError: true,
+		},
+		{
+			name:     "Range beyond file size",
+			start:    24,
+			stop:     30,
+			expected: []byte("YZ"),
+		},
+		{
+			name:        "Start beyond file size",
+			start:       30,
+			stop:        35,
+			expectError: true,
+		},
 	}
 
-	if n != len(content) {
-		t.Errorf("Expected to read %d bytes, read %d", len(content), n)
-	}
+	for _, tc := range testCases {
+		tc := tc // Capture range variable
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a new partialFileReader
+			pfr, err := newPartialFileReader(filePath, tc.start, tc.stop)
+			if tc.expectError {
+				require.Error(t, err, "Expected error for invalid range")
+				return
+			}
+			require.NoError(t, err, "Failed to create partialFileReader")
+			defer pfr.Close()
 
-	if string(buffer) != content {
-		t.Errorf("Expected content %q, got %q", content, string(buffer))
-	}
-}
+			// Read data from partialFileReader
+			var result []byte
+			buf := make([]byte, 5) // Read in chunks of 5 bytes
+			for {
+				n, err := pfr.Read(buf)
+				if n > 0 {
+					result = append(result, buf[:n]...)
+				}
+				if err == io.EOF {
+					break
+				}
+				require.NoError(t, err, "Error reading from partialFileReader")
+			}
 
-// TestPartialFileReadOnPartialContent checks if it can read a portion of the file correctly.
-func TestPartialFileReadOnPartialContent(t *testing.T) {
-	content := "Hello, Go test world!"
-	partContent := "Go test"
-
-	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "example")
-	if err != nil {
-		t.Fatalf("unable to create temporary file: %v", err)
-	}
-	defer os.Remove(tmpfile.Name()) // clean up
-
-	_, err = tmpfile.WriteString(content)
-	if err != nil {
-		t.Fatalf("unable to write to temporary file: %v", err)
-	}
-	tmpfile.Close()
-
-	// Instantiate partialFileReader for partial content
-	pfr := partialFileReader{
-		filePath: tmpfile.Name(),
-		start:    int64(len("Hello, ")),
-		stop:     int64(len("Hello, ") + len(partContent) - 1),
-	}
-
-	buffer := make([]byte, len(partContent))
-	n, err := pfr.Read(buffer)
-	if err != nil && !errors.Is(err, io.EOF) {
-		t.Errorf("Read failed: %v", err)
-	}
-
-	if n != len(partContent) {
-		t.Errorf("Expected to read %d bytes, read %d", len(partContent), n)
-	}
-
-	if string(buffer[:n]) != partContent {
-		t.Errorf("Expected content %q, got %q", partContent, string(buffer[:n]))
-	}
-}
-
-// TestPartialFileReaderEmptyFile tests reading from an empty file.
-func TestPartialFileReaderEmptyFile(t *testing.T) {
-	// Create a temporary, empty file
-	tmpfile, err := os.CreateTemp("", "example")
-	if err != nil {
-		t.Fatalf("unable to create temporary file: %v", err)
-	}
-	defer os.Remove(tmpfile.Name()) // clean up
-
-	// Instantiate partialFileReader for the empty file
-	pfr := partialFileReader{
-		filePath: tmpfile.Name(),
-		start:    0,
-		stop:     0,
-	}
-
-	buffer := make([]byte, 10) // buffer size larger than file content
-	n, err := pfr.Read(buffer)
-	if err != io.EOF {
-		t.Errorf("Expected EOF for empty file read, got: %v", err)
-	}
-
-	if n != 0 {
-		t.Errorf("Expected to read 0 bytes, read %d", n)
-	}
-}
-
-// TestReadingBeyondStopPosition tests attempting to read beyond the 'stop' position.
-func TestReadingBeyondStopPosition(t *testing.T) {
-	content := "Hello, Go!"
-
-	// Create a temporary file
-	tmpfile, err := os.CreateTemp("", "example")
-	if err != nil {
-		t.Fatalf("unable to create temporary file: %v", err)
-	}
-	defer os.Remove(tmpfile.Name()) // clean up
-
-	_, err = tmpfile.WriteString(content)
-	if err != nil {
-		t.Fatalf("unable to write to temporary file: %v", err)
-	}
-	tmpfile.Close()
-
-	// Instantiate partialFileReader with 'stop' before the end of content
-	pfr := partialFileReader{
-		filePath: tmpfile.Name(),
-		start:    0,
-		stop:     int64(len("Hello,")) - 1, // Should stop before " Go!"
-	}
-
-	buffer := make([]byte, len(content)) // buffer large enough to potentially read beyond 'stop'
-	n, err := pfr.Read(buffer)
-	if err != io.EOF {
-		t.Errorf("Expected EOF when reading beyond stop, got: %v", err)
-	}
-
-	if string(buffer[:n]) != "Hello," {
-		t.Errorf("Expected to read up to 'stop' position, got: %q", string(buffer[:n]))
+			require.Equal(t, tc.expected, result, "Read data does not match expected")
+		})
 	}
 }

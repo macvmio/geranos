@@ -8,63 +8,45 @@ import (
 )
 
 type partialFileReader struct {
-	filePath string
-	start    int64
-	stop     int64 // inclusive end of interval
-	offset   int64
-
-	r *bufio.Reader
 	f *os.File
+	r *bufio.Reader
 }
 
-func (pfr *partialFileReader) open() error {
-	f, err := os.Open(pfr.filePath)
+func newPartialFileReader(filepath string, start, stop int64) (*partialFileReader, error) {
+	size := stop - start + 1
+	if size <= 0 {
+		return nil, fmt.Errorf("invalid range: start (%d) must be less than or equal to stop (%d)", start, stop)
+	}
+	f, err := os.Open(filepath)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	info, err := os.Stat(pfr.filePath)
+	fileInfo, err := f.Stat()
 	if err != nil {
-		return fmt.Errorf("unable to state a file '%v': %w", pfr.filePath, err)
+		f.Close()
+		return nil, err
 	}
-	if pfr.stop >= info.Size() {
-		pfr.stop = info.Size() - 1
+	if start >= fileInfo.Size() {
+		f.Close()
+		return nil, fmt.Errorf("start position (%d) is beyond file size (%d)", start, fileInfo.Size())
 	}
-	pfr.offset = pfr.start
-	_, err = f.Seek(pfr.start, io.SeekStart)
-	if err != nil {
-		return err
+	if stop >= fileInfo.Size() {
+		stop = fileInfo.Size() - 1
+		size = stop - start + 1
 	}
-	pfr.f = f
-	pfr.r = bufio.NewReaderSize(f, 64*1024)
+	sr := io.NewSectionReader(f, start, size)
+	pfr := &partialFileReader{
+		f: f,
+		r: bufio.NewReaderSize(sr, 512*1024),
+	}
+	return pfr, nil
+}
 
-	return nil
+func (pfr *partialFileReader) Read(p []byte) (n int, err error) {
+	return pfr.r.Read(p)
 }
 
 func (pfr *partialFileReader) Close() error {
-	err := pfr.f.Close()
-	pfr.f = nil
 	pfr.r = nil
-	return err
-}
-func (pfr *partialFileReader) Read(p []byte) (n int, err error) {
-	if pfr.r == nil {
-		err = pfr.open()
-		if err != nil {
-			return 0, err
-		}
-	}
-	n, err = pfr.r.Read(p)
-	if err == io.EOF {
-		if pfr.offset+int64(n) > pfr.stop {
-			n = int(pfr.stop - pfr.offset + 1)
-		}
-		pfr.offset += int64(n)
-		return n, io.EOF
-	}
-	if pfr.offset+int64(n) > pfr.stop {
-		n = int(pfr.stop - pfr.offset + 1)
-		err = io.EOF
-	}
-	pfr.offset += int64(n)
-	return n, err
+	return pfr.f.Close()
 }
