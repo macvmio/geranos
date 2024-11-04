@@ -1,12 +1,17 @@
 package dirimage
 
 import (
+	"context"
+	"errors"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/macvmio/geranos/pkg/filesegment"
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-/*
 func TestWrite_ContextCancelledDuringWork(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "write-test-*")
@@ -26,7 +31,7 @@ func TestWrite_ContextCancelledDuringWork(t *testing.T) {
 		img, err = mutate.Append(img, mutate.Addendum{
 			Layer:       layer,
 			Annotations: layer.Annotations(),
-			MediaType:   layer.GetMediaType(),
+			MediaType:   "",
 		})
 		require.NoError(t, err)
 	}
@@ -34,16 +39,14 @@ func TestWrite_ContextCancelledDuringWork(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	di := DirImage{
-		Image: img,
-	}
+	di, err := Convert(img)
+	require.NoError(t, err)
 	err = di.Write(ctx, filepath.Join(tempDir, "testdir1"), WithWorkersCount(2))
 
 	if err == nil || !errors.Is(err, context.Canceled) {
 		t.Errorf("Write did not return expected context.Canceled error during work, got: %v", err)
 	}
 }
-*/
 
 func TestDirImage_deleteManifest(t *testing.T) {
 	// Create a temporary directory for testing

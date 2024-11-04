@@ -108,7 +108,7 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 	}
 
 	jobs := make(chan Job, opts.workersCount)
-	g, ctx := errgroup.WithContext(ctx)
+	g, groupCtx := errgroup.WithContext(ctx)
 	layerOpts := []filesegment.LayerOpt{filesegment.WithLogFunction(opts.printf)}
 	for w := 0; w < opts.workersCount; w++ {
 		g.Go(func() error {
@@ -147,8 +147,8 @@ func (di *DirImage) Write(ctx context.Context, destinationDir string, opt ...Opt
 				return err
 			}
 			select {
-			case <-ctx.Done():
-				return ctx.Err() // Early return on context cancellation.
+			case <-groupCtx.Done():
+				return groupCtx.Err() // Early return on context cancellation.
 			case jobs <- Job{Descriptor: *d, Layer: l}:
 			}
 		}
