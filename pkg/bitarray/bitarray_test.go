@@ -51,8 +51,16 @@ func TestBitArray_GetByte(t *testing.T) {
 }
 
 func TestBitArray_String(t *testing.T) {
-	ba := New(64)
-	for idx := 0; idx < 64; idx++ {
+	ba := New(16)
+	for idx := 0; idx < 16; idx++ {
+		ba.Set(idx)
+		fmt.Printf("bitarray: %s\n", ba)
+	}
+}
+
+func TestBitArray_SingleCharacter(t *testing.T) {
+	ba := New(8)
+	for idx := 0; idx < 8; idx++ {
 		ba.Set(idx)
 		fmt.Printf("bitarray: %s\n", ba)
 	}

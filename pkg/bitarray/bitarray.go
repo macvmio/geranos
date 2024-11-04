@@ -31,10 +31,35 @@ func (b *BitArray) GetByte(pos int) byte {
 	return b.data[pos]
 }
 
+// swapBits swaps the bits at positions pos1 and pos2 in byte b.
+func swapBits(b byte, pos1 uint, pos2 uint) byte {
+	// Ensure positions are within the range [0,7]
+	if pos1 > 7 || pos2 > 7 {
+		// Positions out of range, return b unchanged or handle error
+		return b
+	}
+
+	// Extract the bits at positions pos1 and pos2
+	bit1 := (b >> pos1) & 1
+	bit2 := (b >> pos2) & 1
+
+	// If the bits are different, swap them
+	if bit1 != bit2 {
+		// Create a bitmask where bits at pos1 and pos2 are set
+		mask := (uint8(1) << pos1) | (uint8(1) << pos2)
+		// Toggle the bits at pos1 and pos2 using XOR
+		b ^= mask
+	}
+	return b
+}
+
 // braillePattern returns the Unicode Braille Pattern character for a given byte mask.
 func braillePattern(mask byte) rune {
 	// Base Unicode point for Braille Patterns (all dots blank)
 	base := rune(0x2800)
+	mask = swapBits(mask, 3, 4)
+	mask = swapBits(mask, 4, 5)
+	mask = swapBits(mask, 5, 6)
 	return base + rune(mask)
 }
 
