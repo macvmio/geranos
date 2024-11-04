@@ -85,7 +85,17 @@ func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) e
 
 	manifest, err := img.Manifest()
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to get manifest: %w", err)
+	}
+
+	configFile, err := img.ConfigFile()
+	if err != nil {
+		return fmt.Errorf("failed to get config file: %w", err)
+	}
+	diffIDs := configFile.RootFS.DiffIDs
+
+	if len(diffIDs) != len(manifest.Layers) {
+		return fmt.Errorf("mismatch between diffIDs (%d) and manifest layers (%d)", len(diffIDs), len(manifest.Layers))
 	}
 
 	for _, layer := range manifest.Layers {
@@ -94,7 +104,7 @@ func (lm *Mapper) Write(ctx context.Context, img v1.Image, ref name.Reference) e
 		lm.stats.Add(&st)
 	}
 
-	bytesClonedCount, matchedSegmentsCount, err := lm.sketcher.Sketch(destinationDir, *manifest)
+	bytesClonedCount, matchedSegmentsCount, err := lm.sketcher.Sketch(destinationDir, *manifest, diffIDs)
 	if err != nil {
 		// TODO: ensure we don't delete anything useful _ = os.RemoveAll(destinationDir)
 		return err

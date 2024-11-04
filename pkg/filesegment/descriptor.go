@@ -17,6 +17,7 @@ type Descriptor struct {
 	start    int64
 	stop     int64
 	digest   v1.Hash
+	diffID   v1.Hash
 }
 
 func (d *Descriptor) Filename() string {
@@ -34,6 +35,8 @@ func (d *Descriptor) Stop() int64 {
 func (d *Descriptor) Digest() v1.Hash {
 	return d.digest
 }
+
+func (d *Descriptor) DiffID() v1.Hash { return d.diffID }
 
 func (d *Descriptor) Length() int64 {
 	return d.stop - d.start + 1
@@ -83,7 +86,7 @@ func NewDescriptor(filename string, start, stop int64, digest v1.Hash) *Descript
 	}
 }
 
-func ParseDescriptor(d v1.Descriptor) (*Descriptor, error) {
+func ParseDescriptor(d v1.Descriptor, diffID v1.Hash) (*Descriptor, error) {
 	if d.MediaType != MediaType {
 		return nil, errors.New("unsupported layer type")
 	}
@@ -104,5 +107,6 @@ func ParseDescriptor(d v1.Descriptor) (*Descriptor, error) {
 		start:    start,
 		stop:     stop,
 		digest:   d.Digest,
+		diffID:   diffID,
 	}, nil
 }

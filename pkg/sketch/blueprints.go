@@ -40,10 +40,15 @@ func (fr *fileBlueprint) Validate() error {
 	return nil
 }
 
-func createBlueprintsFromManifest(manifest v1.Manifest) ([]*fileBlueprint, error) {
+func createBlueprintsFromManifest(manifest v1.Manifest, diffIDs []v1.Hash) ([]*fileBlueprint, error) {
 	fileBlueprintsMap := make(map[string]*fileBlueprint)
-	for _, l := range manifest.Layers {
-		segmentDescriptor, err := filesegment.ParseDescriptor(l)
+
+	// Ensure the number of diffIDs matches the number of layers
+	if len(diffIDs) != len(manifest.Layers) {
+		return nil, fmt.Errorf("mismatch between diffIDs (%d) and manifest layers (%d)", len(diffIDs), len(manifest.Layers))
+	}
+	for i, l := range manifest.Layers {
+		segmentDescriptor, err := filesegment.ParseDescriptor(l, diffIDs[i])
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse descriptor: %w", err)
 		}

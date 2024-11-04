@@ -55,9 +55,8 @@ func fileExists(filePath string) bool {
 	return !info.IsDir()
 }
 
-func (sc *Sketcher) Sketch(dir string, manifest v1.Manifest) (bytesClonedCount int64, matchedSegmentsCount int64, err error) {
-
-	fileBlueprints, err := createBlueprintsFromManifest(manifest)
+func (sc *Sketcher) Sketch(dir string, manifest v1.Manifest, diffIDs []v1.Hash) (bytesClonedCount int64, matchedSegmentsCount int64, err error) {
+	fileBlueprints, err := createBlueprintsFromManifest(manifest, diffIDs)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -151,7 +150,7 @@ func (sc *Sketcher) findCloneCandidates() ([]*cloneCandidate, error) {
 
 		// Parse each layer and group by filename
 		for _, l := range manifest.Layers {
-			segmentDescriptor, err := filesegment.ParseDescriptor(l)
+			segmentDescriptor, err := filesegment.ParseDescriptor(l, v1.Hash{})
 			if err != nil {
 				return nil, fmt.Errorf("unable to parse descriptor: %w", err)
 			}

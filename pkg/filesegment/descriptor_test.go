@@ -36,6 +36,7 @@ func TestParseIntPair(t *testing.T) {
 }
 
 func TestParseDescriptor(t *testing.T) {
+	fakeDiffID := v1.Hash{Algorithm: "sha256", Hex: "abc123"}
 	descriptor := v1.Descriptor{
 		MediaType: MediaType,
 		Digest:    v1.Hash{Algorithm: "sha256", Hex: "abc123"},
@@ -46,7 +47,7 @@ func TestParseDescriptor(t *testing.T) {
 	}
 
 	t.Run("Valid Descriptor", func(t *testing.T) {
-		d, err := ParseDescriptor(descriptor)
+		d, err := ParseDescriptor(descriptor, fakeDiffID)
 		assert.NoError(t, err)
 		assert.Equal(t, "image.jpg", d.Filename())
 		assert.Equal(t, int64(100), d.Start())
@@ -57,21 +58,21 @@ func TestParseDescriptor(t *testing.T) {
 	t.Run("Missing Filename", func(t *testing.T) {
 		modifiedDescriptor := descriptor
 		delete(modifiedDescriptor.Annotations, FilenameAnnotationKey)
-		_, err := ParseDescriptor(modifiedDescriptor)
+		_, err := ParseDescriptor(modifiedDescriptor, fakeDiffID)
 		assert.Error(t, err)
 	})
 
 	t.Run("Missing Range", func(t *testing.T) {
 		modifiedDescriptor := descriptor
 		delete(modifiedDescriptor.Annotations, RangeAnnotationKey)
-		_, err := ParseDescriptor(modifiedDescriptor)
+		_, err := ParseDescriptor(modifiedDescriptor, fakeDiffID)
 		assert.Error(t, err)
 	})
 
 	t.Run("Unsupported MediaType", func(t *testing.T) {
 		modifiedDescriptor := descriptor
 		modifiedDescriptor.MediaType = "unsupported/type"
-		_, err := ParseDescriptor(modifiedDescriptor)
+		_, err := ParseDescriptor(modifiedDescriptor, fakeDiffID)
 		assert.Error(t, err)
 	})
 }

@@ -10,6 +10,6 @@ func Matches(d *Descriptor, dir string, opt ...LayerOpt) bool {
 	if err != nil {
 		return false
 	}
-	digest, err := l.Digest()
-	return err == nil && digest == d.digest
+	diffID, err := l.DiffID()
+	return err == nil && diffID == d.diffID
 }

@@ -87,7 +87,7 @@ func prepareLayersFromManifestAndConfig(dir string, cfgFile *v1.ConfigFile) ([]v
 	// Construct placeholder layers
 	layers := make([]v1.Layer, len(manifest.Layers))
 	for i, mLayer := range manifest.Layers {
-		d, err := filesegment.ParseDescriptor(mLayer)
+		d, err := filesegment.ParseDescriptor(mLayer, cfgFile.RootFS.DiffIDs[i])
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse descriptor: %w", err)
 		}

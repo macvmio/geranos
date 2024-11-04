@@ -36,7 +36,7 @@ func prepare5CloneCandidatesWith10Layers(t *testing.T, rootDir string) []*filese
 		manifest, err := img.Manifest()
 		require.NoError(t, err)
 		for _, d := range manifest.Layers {
-			fDescriptor, err := filesegment.ParseDescriptor(d)
+			fDescriptor, err := filesegment.ParseDescriptor(d, v1.Hash{})
 			require.NoError(t, err)
 			descriptors = append(descriptors, fDescriptor)
 		}
@@ -127,8 +127,8 @@ func TestDefaultSketchConstructor_ConstructConstruct(t *testing.T) {
 			// Call the prepare function to set up clone candidates
 			descriptors := tt.prepareCloneCandidates(t, sc.rootDirectory)
 			manifest := tt.prepareManifest(descriptors)
-
-			bytesClonedCount, matchedSegmentsCount, err := sc.Sketch(filepath.Join(rootDir, "some/dir"), manifest)
+			fakeDiffIDs := make([]v1.Hash, len(manifest.Layers))
+			bytesClonedCount, matchedSegmentsCount, err := sc.Sketch(filepath.Join(rootDir, "some/dir"), manifest, fakeDiffIDs)
 
 			if tt.expectedErr != nil {
 				assert.EqualError(t, err, tt.expectedErr.Error())
@@ -380,7 +380,7 @@ func TestSketch_DoesNotOverwriteExistingFile(t *testing.T) {
 	manifest := prepareManifest(descriptors[0])
 
 	// Run Sketch and check that the existing file is not overwritten
-	_, _, err = sc.Sketch(destDir, manifest)
+	_, _, err = sc.Sketch(destDir, manifest, []v1.Hash{v1.Hash{Algorithm: "sha256", Hex: "fake"}})
 	assert.NoError(t, err)
 
 	// Verify that the existing file content remains unchanged
