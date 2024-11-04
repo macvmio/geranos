@@ -60,7 +60,7 @@ If you prefer to build from source:
 ```bash
 git clone https://github.com/macvmio/geranos.git
 cd geranos
-go build -o geranos main.go
+go build -o geranos ./cmd/geranos/main.go
 ```
 
 ## Usage
