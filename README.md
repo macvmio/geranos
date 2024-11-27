@@ -1,4 +1,4 @@
-# Geranos
+![Geranos](resources/geranos-logo.png)
 
 [![Build Status](https://github.com/macvmio/geranos/actions/workflows/main.yml/badge.svg)](https://github.com/macvmio/geranos/actions)
 [![Build Status](https://github.com/macvmio/geranos/actions/workflows/release.yml/badge.svg)](https://github.com/macvmio/geranos/actions)
