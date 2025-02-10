@@ -53,6 +53,14 @@ Geranos can be downloaded from the [GitHub releases page](https://github.com/mac
       chmod +x /usr/local/bin/geranos
       ```
 
+### Using Mise
+
+You can use [Mise](https://mise.jdx.dev)'s [Ubi backend](https://mise.jdx.dev/dev-tools/backends/ubi.html) to install `geranos` with the following command:
+
+```bash
+mise install ubi:macvmio/geranos
+```
+
 ### Build from Source (Optional)
 
 If you prefer to build from source:
@@ -131,7 +139,7 @@ geranos [command] --help
 ### Examples
 
 - **List remote images**
-  
+
   ```bash
   geranos remote images ghcr.io/macvmio/macos-sonoma
   ```
@@ -176,4 +184,3 @@ Geranos is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) fil
 - **GitHub Repository**: [github.com/macvmio/geranos](https://github.com/macvmio/geranos)
 - **Issues**: [github.com/macvmio/geranos/issues](https://github.com/macvmio/geranos/issues)
 - **Email**: [contact@macvm.io](mailto:contact@macvm.io)
-
